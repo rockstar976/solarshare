@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SolarShare MVP</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            900: '#14532d',
+                        },
+                        dark: {
+                            bg: '#0f172a',
+                            card: '#1e293b',
+                            border: '#334155'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [v-cloak] { display: none; }
+        .toast-enter-active, .toast-leave-active { transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(50px) scale(0.95); }
+        
+        .dropdown-enter-active, .dropdown-leave-active { transition: all 0.2s ease; }
+        .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-10px) scale(0.95); pointer-events: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 dark:bg-dark-bg dark:text-gray-100 transition-colors duration-200">
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
+        <!-- Navbar -->
+        <nav class="bg-white dark:bg-dark-card border-b border-gray-200 dark:border-dark-border sticky top-0 z-10 shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <i class="ph-fill ph-sun text-brand-500 text-3xl mr-2"></i>
+                        <span class="font-bold text-xl tracking-tight">SolarShare</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-sm font-medium px-3 py-1 bg-brand-50 dark:bg-brand-900/40 border border-brand-200 dark:border-brand-900 text-brand-600 dark:text-brand-400 rounded-full hidden sm:flex items-center">
+                            <i class="ph ph-wallet mr-1"></i> Balance: ₹{{ balance.toFixed(2) }}
+                            <button @click="addFunds" class="ml-2 hover:text-brand-800 dark:hover:text-brand-200 focus:outline-none transition-colors" title="Add Funds">
+                                <i class="ph-bold ph-plus"></i>
+                            </button>
+                        </div>
+                        <div v-if="escrowBalance > 0" class="text-sm font-medium px-3 py-1 bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-full hidden sm:flex items-center animate-pulse">
+                            <i class="ph-fill ph-lock-key mr-1"></i> In Escrow: ₹{{ escrowBalance.toFixed(2) }}
+                        </div>
+                        
+                        <div class="flex items-center space-x-1 sm:space-x-2 border-l border-gray-200 dark:border-dark-border pl-2 sm:pl-4">
+                            <button @click="toggleTheme" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border transition-colors">
+                                <i :class="isDark ? 'ph ph-sun text-xl text-yellow-400' : 'ph-fill ph-moon text-xl text-slate-700'"></i>
+                            </button>
+                            
+                            <!-- Notifications -->
+                            <div class="relative">
+                                <button @click.stop="toggleNotifications" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-dark-border transition-colors relative">
+                                    <i class="ph ph-bell text-xl"></i>
+                                    <span v-if="unreadCount > 0" class="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white dark:border-dark-card"></span>
+                                    </span>
+                                </button>
+                                
+                                <transition name="dropdown">
+                                    <div v-if="showNotifications" class="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-dark-card rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 border border-gray-200 dark:border-dark-border overflow-hidden z-50">
+                                        <div class="p-3 border-b border-gray-100 dark:border-dark-border flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                                            <h3 class="text-sm font-bold text-gray-900 dark:text-white flex items-center"><i class="ph-fill ph-bell-ringing mr-2 text-brand-500 text-lg"></i> Activity & Alerts</h3>
+                                            <button @click="markAllRead" v-if="unreadCount > 0" class="text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium">Mark all read</button>
+                                        </div>
+                                        <div class="max-h-80 overflow-y-auto">
+                                            <div v-if="notificationHistory.length === 0" class="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                <i class="ph ph-bell-slash text-3xl mb-2 text-gray-300 dark:text-gray-600"></i>
+                                                <p>No new notifications.</p>
+                                            </div>
+                                            <div v-for="notif in notificationHistory" :key="notif.id" :class="['p-4 border-b border-gray-100 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors', !notif.read ? 'bg-brand-50/50 dark:bg-brand-900/10' : '']">
+                                                <div class="flex items-start">
+                                                    <i v-if="notif.type === 'success'" class="ph-fill ph-check-circle text-green-500 mt-0.5 mr-3 flex-shrink-0 text-lg"></i>
+                                                    <i v-if="notif.type === 'info'" class="ph-fill ph-info text-blue-500 mt-0.5 mr-3 flex-shrink-0 text-lg"></i>
+                                                    <i v-if="notif.type === 'error'" class="ph-fill ph-warning-circle text-red-500 mt-0.5 mr-3 flex-shrink-0 text-lg"></i>
+                                                    <div class="flex-1">
+                                                        <p class="text-sm font-bold text-gray-900 dark:text-white">{{ notif.title }}</p>
+                                                        <p class="text-xs text-gray-600 dark:text-gray-300 mt-1 leading-snug">{{ notif.message }}</p>
+                                                        <p class="text-[10px] font-medium text-gray-400 mt-1.5 flex items-center"><i class="ph ph-clock mr-1"></i>{{ new Date(notif.timestamp).toLocaleTimeString() }}</p>
+                                                    </div>
+                                                    <span v-if="!notif.read" class="h-2 w-2 bg-brand-500 rounded-full flex-shrink-0 mt-1.5 ml-2"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
+                            
+                            <!-- Profile -->
+                            <div class="relative ml-1 sm:ml-2">
+                                <button @click.stop="toggleProfile" class="flex items-center space-x-2 p-1 pr-2 sm:pr-3 rounded-full border border-gray-200 dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-border transition-colors focus:ring-2 focus:ring-brand-500">
+                                    <img :src="'https://ui-avatars.com/api/?name=' + userProfile.name + '&background=22c55e&color=fff&bold=true'" alt="User" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full shadow-sm">
+                                    <span class="text-sm font-bold hidden sm:block truncate max-w-[80px] text-gray-700 dark:text-gray-200">{{ userProfile.name.split(' ')[0] }}</span>
+                                    <i class="ph-bold ph-caret-down text-xs text-gray-400 hidden sm:block"></i>
+                                </button>
+                                
+                                <transition name="dropdown">
+                                    <div v-if="showProfile" class="absolute right-0 mt-2 w-72 bg-white dark:bg-dark-card rounded-lg shadow-xl ring-1 ring-black ring-opacity-5 border border-gray-200 dark:border-dark-border overflow-hidden z-50">
+                                        <div class="p-5 border-b border-gray-100 dark:border-dark-border bg-gradient-to-r from-brand-50 to-white dark:from-brand-900/20 dark:to-dark-card">
+                                            <div class="flex items-center space-x-4">
+                                                <img :src="'https://ui-avatars.com/api/?name=' + userProfile.name + '&background=22c55e&color=fff&bold=true'" class="w-14 h-14 rounded-full border-2 border-white dark:border-dark-card shadow-md">
+                                                <div>
+                                                    <p class="text-base font-bold text-gray-900 dark:text-white">{{ userProfile.name }}</p>
+                                                    <span class="inline-flex items-center px-2 py-0.5 mt-1 rounded text-[10px] font-bold bg-brand-100 text-brand-800 dark:bg-brand-900/50 dark:text-brand-300 border border-brand-200 dark:border-brand-800/50 uppercase tracking-wider">
+                                                        {{ userProfile.role }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="p-3 space-y-1">
+                                            <div class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex justify-between items-center rounded hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                <span class="flex items-center text-gray-500 dark:text-gray-400"><i class="ph-fill ph-house mr-2 text-lg"></i> Flat No.</span>
+                                                <span class="font-bold text-gray-900 dark:text-white">{{ userProfile.flatNo }}</span>
+                                            </div>
+                                            <div class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex justify-between items-center rounded hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                <span class="flex items-center text-gray-500 dark:text-gray-400"><i class="ph-fill ph-lightning mr-2 text-lg"></i> Smart Meter</span>
+                                                <span class="font-mono text-xs bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded text-gray-900 dark:text-white">{{ userProfile.meterId }}</span>
+                                            </div>
+                                            <div class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex justify-between items-center rounded hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                <span class="flex items-center text-gray-500 dark:text-gray-400"><i class="ph-fill ph-plug mr-2 text-lg"></i> DISCOM</span>
+                                                <span class="font-bold text-gray-900 dark:text-white">{{ userProfile.discom }}</span>
+                                            </div>
+                                            <div class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 flex justify-between items-center rounded hover:bg-gray-50 dark:hover:bg-gray-800/50 sm:hidden">
+                                                <span class="flex items-center text-gray-500 dark:text-gray-400"><i class="ph-fill ph-wallet mr-2 text-lg"></i> Balance</span>
+                                                <div class="flex items-center">
+                                                    <span class="font-bold text-brand-600 dark:text-brand-400 mr-2">₹{{ balance.toFixed(2) }}</span>
+                                                    <button @click="addFunds" class="text-brand-600 hover:text-brand-800 bg-brand-50 dark:bg-brand-900/30 p-1 rounded border border-brand-200 dark:border-brand-800">
+                                                        <i class="ph-bold ph-plus"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="border-t border-gray-100 dark:border-dark-border p-2 bg-gray-50 dark:bg-gray-800/30">
+                                            <button class="w-full text-left px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex items-center justify-center">
+                                                <i class="ph-bold ph-sign-out mr-2"></i> Sign Out
+                                            </button>
+                                        </div>
+                                    </div>
+                                </transition>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+            <!-- Tabs -->
+            <div class="border-b border-gray-200 dark:border-dark-border mb-8">
+                <nav class="-mb-px flex space-x-8">
+                    <button v-for="tab in tabs" :key="tab.id"
+                        @click="currentTab = tab.id"
+                        :class="[
+                            currentTab === tab.id
+                                ? 'border-brand-500 text-brand-600 dark:text-brand-500'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300',
+                            'whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center transition-colors'
+                        ]">
+                        <i :class="tab.icon + ' mr-2 text-lg'"></i>
+                        {{ tab.name }}
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Tab Content: Marketplace -->
+            <div v-show="currentTab === 'market'" class="space-y-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold leading-7 sm:truncate sm:text-3xl sm:tracking-tight">Local Energy Marketplace</h2>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Buy surplus solar energy from your neighbors directly.</p>
+                    </div>
+                    <button @click="refreshMarket" class="text-sm text-brand-600 dark:text-brand-500 hover:underline flex items-center">
+                        <i class="ph ph-arrows-clockwise mr-1"></i> Refresh Market
+                    </button>
+                </div>
+
+                <div v-if="marketListings.length === 0" class="text-center py-12 bg-white dark:bg-dark-card rounded-lg border border-gray-200 dark:border-dark-border shadow-sm">
+                    <i class="ph ph-solar-panel text-4xl text-gray-400 mb-2"></i>
+                    <h3 class="text-lg font-medium">No active listings</h3>
+                    <p class="text-gray-500 dark:text-gray-400">Waiting for neighbors to list surplus power.</p>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <div v-for="item in marketListings" :key="item.id" class="bg-white dark:bg-dark-card overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-dark-border transition hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 group">
+                        <div class="px-4 py-5 sm:p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="bg-brand-50 dark:bg-brand-900/30 p-2 rounded-full border border-brand-100 dark:border-brand-900">
+                                        <i class="ph ph-house text-brand-600 dark:text-brand-400 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">{{ item.sellerName }}</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">{{ item.distance }} away</p>
+                                    </div>
+                                </div>
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 border border-green-200 dark:border-green-800/50">
+                                    Active
+                                </span>
+                            </div>
+                            <div class="mt-4 flex justify-between items-end border-t border-gray-100 dark:border-dark-border pt-4">
+                                <div>
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Available Energy</p>
+                                    <p class="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">{{ item.units.toFixed(1) }} <span class="text-sm font-normal text-gray-500">kWh</span></p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500 dark:text-gray-400">Price</p>
+                                    <p class="mt-1 text-xl font-semibold text-brand-600 dark:text-brand-400">₹{{ item.price.toFixed(2) }}<span class="text-sm font-normal text-gray-500 dark:text-gray-400">/unit</span></p>
+                                </div>
+                            </div>
+                            <div class="mt-5">
+                                <button @click="buyEnergy(item)" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 transition-colors">
+                                    <i class="ph ph-lightning mr-2"></i>
+                                    Buy for ₹{{ (item.units * item.price).toFixed(2) }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: List Surplus -->
+            <div v-show="currentTab === 'list'" class="max-w-2xl mx-auto">
+                <div class="bg-white dark:bg-dark-card shadow-sm rounded-lg border border-gray-200 dark:border-dark-border overflow-hidden">
+                    <div class="px-4 py-5 sm:p-6">
+                        <h3 class="text-lg leading-6 font-bold text-gray-900 dark:text-white flex items-center">
+                            <i class="ph ph-broadcast mr-2 text-brand-500 text-xl"></i>
+                            List Your Surplus Energy
+                        </h3>
+                        <div class="mt-2 max-w-xl text-sm text-gray-500 dark:text-gray-400">
+                            <p>Your smart meter indicates you have excess solar generation. List it on the local P2P grid to earn a better margin than DISCOM buybacks.</p>
+                        </div>
+                        
+                        <div class="mt-6 bg-gray-50 dark:bg-gray-800/50 rounded-md p-4 border border-gray-200 dark:border-dark-border mb-6 flex justify-between items-center">
+                            <div class="flex items-center">
+                                <div class="relative">
+                                    <i class="ph-fill ph-lightning text-yellow-500 text-2xl mr-3"></i>
+                                    <span class="absolute top-0 right-2 flex h-2 w-2">
+                                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                      <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                                    </span>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">Live Generation</p>
+                                    <p class="text-xs text-gray-500">Syncing with Smart Meter (UEI)</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ liveMeterSurplus.toFixed(1) }}</span>
+                                <span class="text-sm text-gray-500 ml-1">kWh surplus</span>
+                            </div>
+                        </div>
+
+                        <form @submit.prevent="listEnergy" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Units to Sell (kWh)</label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <i class="ph ph-battery-charging text-gray-400"></i>
+                                    </div>
+                                    <input type="number" v-model.number="sellForm.units" min="0.1" :max="liveMeterSurplus" step="0.1" class="block w-full pl-10 pr-12 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:ring-brand-500 focus:border-brand-500 h-10 border px-3" placeholder="0.0">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Price per Unit (₹)</label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-400 font-medium">₹</span>
+                                    </div>
+                                    <input type="number" v-model.number="sellForm.price" min="3.5" max="8.0" step="0.1" class="block w-full pl-10 pr-16 sm:text-sm border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-white focus:ring-brand-500 focus:border-brand-500 h-10 border px-3">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-500 sm:text-sm">/ kWh</span>
+                                    </div>
+                                </div>
+                                <div class="mt-2 text-xs flex justify-between">
+                                    <span class="text-red-500 dark:text-red-400">DISCOM Buyback: ₹3.50</span>
+                                    <span class="text-brand-600 dark:text-brand-400 font-medium">Suggested: ₹5.50</span>
+                                    <span class="text-gray-500">Retail Grid: ₹8.00</span>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/50 p-4 rounded-md flex">
+                                <i class="ph-fill ph-info text-blue-500 text-xl mr-3 flex-shrink-0"></i>
+                                <div class="text-sm text-blue-800 dark:text-blue-200 w-full">
+                                    <p class="font-bold mb-2 border-b border-blue-200 dark:border-blue-800/50 pb-1">Economics Summary</p>
+                                    <div class="flex justify-between mb-1">
+                                        <span>Estimated Sale:</span>
+                                        <span>₹{{ (sellForm.units * sellForm.price).toFixed(2) }}</span>
+                                    </div>
+                                    <div class="flex justify-between mb-1 text-gray-500 dark:text-gray-400">
+                                        <span>Platform Fee (₹0.25/unit):</span>
+                                        <span>-₹{{ (sellForm.units * 0.25).toFixed(2) }}</span>
+                                    </div>
+                                    <div class="flex justify-between font-bold mt-2 pt-2 border-t border-blue-200 dark:border-blue-800/50">
+                                        <span>Net Earnings:</span>
+                                        <span class="text-brand-600 dark:text-brand-400">₹{{ (sellForm.units * (sellForm.price - 0.25)).toFixed(2) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" :disabled="!isSellFormValid" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                Publish to P2P Grid
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Ledger History -->
+            <div v-show="currentTab === 'history'" class="space-y-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-bold leading-7 sm:truncate sm:text-3xl sm:tracking-tight flex items-center">
+                            <i class="ph-fill ph-cube mr-2 text-gray-400"></i>
+                            Blockchain Ledger
+                        </h2>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tamper-evident transaction history via SHA-256 hashing (Phase 0 Simulation).</p>
+                    </div>
+                    <button @click="clearHistory" class="text-xs text-red-500 hover:underline">Clear Local History</button>
+                </div>
+
+                <div class="bg-white dark:bg-dark-card shadow-sm rounded-lg border border-gray-200 dark:border-dark-border overflow-hidden">
+                    <ul role="list" class="divide-y divide-gray-200 dark:divide-dark-border">
+                        <li v-if="history.length === 0" class="px-4 py-12 text-center">
+                            <i class="ph ph-receipt text-4xl text-gray-300 dark:text-gray-600 mb-2"></i>
+                            <p class="text-gray-500 dark:text-gray-400">No transactions recorded yet on the local ledger.</p>
+                        </li>
+                        <li v-for="tx in history" :key="tx.id" class="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div :class="[
+                                        tx.type === 'buy' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-900/50' : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-900/50',
+                                        'p-2 rounded-full'
+                                    ]">
+                                        <i :class="tx.type === 'buy' ? 'ph ph-arrow-down-left' : 'ph ph-arrow-up-right'" class="text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                            {{ tx.type === 'buy' ? 'Purchased from ' + tx.counterparty : 'Sold to ' + tx.counterparty }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 flex items-center mt-1">
+                                            <i class="ph ph-clock mr-1"></i> {{ new Date(tx.timestamp).toLocaleString() }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p :class="tx.type === 'buy' ? 'text-gray-900 dark:text-white' : 'text-brand-600 dark:text-brand-400'" class="text-sm font-bold">
+                                        {{ tx.type === 'buy' ? '-' : '+' }}₹{{ (tx.netAmount || tx.amount).toFixed(2) }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1 font-medium">{{ tx.units.toFixed(1) }} kWh @ ₹{{ tx.price.toFixed(2) }}/u</p>
+                                </div>
+                            </div>
+                            <div v-if="tx.type === 'sell' && tx.commission" class="mt-2 mb-2 bg-blue-50 dark:bg-blue-900/20 rounded p-2 text-xs text-gray-600 dark:text-gray-400 border border-blue-100 dark:border-blue-900/50 flex justify-between">
+                                <span>Gross: ₹{{ tx.amount.toFixed(2) }}</span>
+                                <span class="text-red-500 dark:text-red-400">- Platform Fee: ₹{{ tx.commission.toFixed(2) }}</span>
+                                <span class="font-bold text-gray-900 dark:text-white">Net to Bank: ₹{{ tx.netAmount.toFixed(2) }}</span>
+                            </div>
+                            <div class="mt-3 text-[10px] bg-gray-50 dark:bg-gray-900/80 p-2 rounded font-mono text-gray-500 dark:text-gray-400 break-all flex items-start border border-gray-100 dark:border-gray-800">
+                                <i class="ph-fill ph-lock-key mr-2 text-brand-500 text-sm"></i>
+                                <span><span class="text-gray-400 dark:text-gray-500 select-none">TX_HASH: </span>{{ tx.hash }}</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+
+        <!-- Toast Notifications (Top Right) -->
+        <div class="fixed top-20 right-4 sm:right-6 p-0 z-50 flex flex-col space-y-3 pointer-events-none w-full max-w-sm">
+            <TransitionGroup name="toast">
+                <div v-for="toast in toasts" :key="toast.id" class="pointer-events-auto w-full overflow-hidden bg-white dark:bg-dark-card rounded-lg shadow-xl border border-gray-100 dark:border-dark-border flex relative group">
+                    <div :class="[
+                        toast.type === 'success' ? 'bg-green-500' : 
+                        toast.type === 'error' ? 'bg-red-500' : 'bg-brand-500',
+                        'w-1.5 flex-shrink-0'
+                    ]"></div>
+                    <div class="p-4 flex-1">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 mt-0.5">
+                                <i v-if="toast.type === 'success'" class="ph-fill ph-check-circle text-green-500 text-xl"></i>
+                                <i v-if="toast.type === 'info'" class="ph-fill ph-info text-brand-500 text-xl"></i>
+                                <i v-if="toast.type === 'error'" class="ph-fill ph-warning-circle text-red-500 text-xl"></i>
+                            </div>
+                            <div class="ml-3 w-0 flex-1 pt-0.5">
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ toast.title }}</p>
+                                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300 leading-snug">{{ toast.message }}</p>
+                            </div>
+                            <div class="ml-4 flex-shrink-0 flex">
+                                <button @click="removeToast(toast.id)" class="rounded-md inline-flex text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 focus:outline-none transition-colors opacity-0 group-hover:opacity-100">
+                                    <span class="sr-only">Close</span>
+                                    <i class="ph-bold ph-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </TransitionGroup>
+        </div>
+    </div>
+
+    <script>
+        // Simple SHA-256 simulation for the demo (to represent tamper-evident hash)
+        async function mockHash(str) {
+            const buffer = new TextEncoder().encode(str);
+            const hash = await crypto.subtle.digest('SHA-256', buffer);
+            return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        const { createApp, ref, computed, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const isDark = ref(true)
+                const currentTab = ref('market')
+                const balance = ref(150.00)
+                const escrowBalance = ref(0.00)
+                const liveMeterSurplus = ref(8.5)
+                
+                // Profile & Notification State
+                const showProfile = ref(false)
+                const showNotifications = ref(false)
+                const notificationHistory = ref([])
+                const unreadCount = computed(() => notificationHistory.value.filter(n => !n.read).length)
+                
+                const userProfile = ref({
+                    name: 'Priya Sharma',
+                    role: 'Prosumer',
+                    flatNo: 'A-302',
+                    meterId: 'DLMS-92847-X',
+                    discom: 'BSES Rajdhani'
+                })
+
+                // Click outside handlers
+                const closeMenus = (e) => {
+                    const isDropdownClick = e.target.closest('.absolute.right-0.mt-2')
+                    if (!isDropdownClick) {
+                        showProfile.value = false;
+                        showNotifications.value = false;
+                    }
+                }
+                
+                const toggleProfile = () => {
+                    showProfile.value = !showProfile.value
+                    showNotifications.value = false
+                }
+                
+                const toggleNotifications = () => {
+                    showNotifications.value = !showNotifications.value
+                    showProfile.value = false
+                    if (showNotifications.value) markAllRead()
+                }
+
+                const markAllRead = () => {
+                    notificationHistory.value.forEach(n => n.read = true)
+                    localStorage.setItem('solarshare_notifications', JSON.stringify(notificationHistory.value))
+                }
+                
+                const tabs = [
+                    { id: 'market', name: 'Marketplace', icon: 'ph ph-shopping-cart' },
+                    { id: 'list', name: 'List Surplus', icon: 'ph ph-lightning' },
+                    { id: 'history', name: 'Ledger History', icon: 'ph ph-books' }
+                ]
+
+                const marketListings = ref([])
+                const history = ref([])
+                const toasts = ref([])
+                
+                const sellForm = ref({
+                    units: 5.0,
+                    price: 5.50
+                })
+
+                const isSellFormValid = computed(() => {
+                    return sellForm.value.units > 0 && 
+                           sellForm.value.units <= liveMeterSurplus.value &&
+                           sellForm.value.price >= 3.5 &&
+                           sellForm.value.price <= 8.0
+                })
+
+                const toggleTheme = () => {
+                    isDark.value = !isDark.value
+                    if (isDark.value) {
+                        document.documentElement.classList.add('dark')
+                    } else {
+                        document.documentElement.classList.remove('dark')
+                    }
+                }
+
+                const addFunds = () => {
+                    const amountStr = prompt("Enter amount to add to wallet via UPI (₹):", "500")
+                    if (amountStr) {
+                        const amount = parseFloat(amountStr)
+                        if (!isNaN(amount) && amount > 0) {
+                            balance.value += amount
+                            showToast('success', 'Funds Added', `₹${amount.toFixed(2)} successfully added to your wallet.`)
+                        } else {
+                            showToast('error', 'Invalid Amount', 'Please enter a valid number.')
+                        }
+                    }
+                }
+
+                const refreshMarket = () => {
+                    marketListings.value = []
+                    const count = Math.floor(Math.random() * 4) + 2 // 2 to 5 listings
+                    for(let i=0; i<count; i++) {
+                        const names = ["A-402 (Sharma)", "B-105 (Gupta)", "C-301 (Reddy)", "D-202 (Iyer)", "A-101 (Singh)"]
+                        const name = names[Math.floor(Math.random() * names.length)]
+                        const units = (Math.random() * 5 + 1).toFixed(1)
+                        marketListings.value.push({
+                            id: Date.now().toString() + Math.random().toString(),
+                            sellerName: name,
+                            distance: Math.floor(Math.random() * 50 + 10) + "m",
+                            units: parseFloat(units),
+                            price: 5.50
+                        })
+                    }
+                    showToast('info', 'Market Refreshed', `Found ${count} active sellers in your local grid.`)
+                }
+
+                const generateMockListing = () => {
+                    if (marketListings.value.length >= 6) return
+                    
+                    const names = ["A-402 (Sharma)", "B-105 (Gupta)", "C-301 (Reddy)", "D-202 (Iyer)", "A-101 (Singh)"]
+                    const name = names[Math.floor(Math.random() * names.length)]
+                    const units = (Math.random() * 5 + 1).toFixed(1)
+                    
+                    marketListings.value.unshift({
+                        id: Date.now().toString() + Math.random().toString(),
+                        sellerName: name,
+                        distance: Math.floor(Math.random() * 50 + 10) + "m",
+                        units: parseFloat(units),
+                        price: 5.50
+                    })
+                    showToast('info', 'Grid Update', `New surplus energy listed by ${name}.`)
+                }
+
+                const showToast = (type, title, message) => {
+                    const id = Date.now()
+                    toasts.value.push({ id, type, title, message })
+                    setTimeout(() => removeToast(id), 5000)
+                    
+                    // Add to notification history
+                    notificationHistory.value.unshift({
+                        id, type, title, message, 
+                        timestamp: new Date().toISOString(),
+                        read: showNotifications.value
+                    })
+                    
+                    if(notificationHistory.value.length > 50) notificationHistory.value.pop()
+                    localStorage.setItem('solarshare_notifications', JSON.stringify(notificationHistory.value))
+                }
+
+                const removeToast = (id) => {
+                    toasts.value = toasts.value.filter(t => t.id !== id)
+                }
+
+                const addTransaction = async (type, units, price, amount, counterparty, commission = 0) => {
+                    const timestamp = new Date().toISOString()
+                    const netAmount = type === 'sell' ? amount - commission : amount
+                    const rawData = `${type}|${units}|${price}|${amount}|${counterparty}|${timestamp}|${commission}`
+                    const hash = await mockHash(rawData)
+                    
+                    const tx = {
+                        id: Date.now().toString(),
+                        type, units, price, amount, counterparty, timestamp, hash, commission, netAmount
+                    }
+                    history.value.unshift(tx)
+                    localStorage.setItem('solarshare_history', JSON.stringify(history.value))
+                }
+
+                const clearHistory = () => {
+                    if(confirm("Are you sure you want to clear the local ledger history?")) {
+                        history.value = []
+                        localStorage.removeItem('solarshare_history')
+                        showToast('info', 'Ledger Cleared', 'Local history has been reset.')
+                    }
+                }
+
+                const buyEnergy = async (item) => {
+                    const totalCost = item.units * item.price
+                    if (balance.value < totalCost) {
+                        showToast('error', 'Insufficient Funds', `You need ₹${totalCost.toFixed(2)} to buy this.`)
+                        return
+                    }
+                    
+                    // Phase 1: Move to Escrow
+                    balance.value -= totalCost
+                    escrowBalance.value += totalCost
+                    marketListings.value = marketListings.value.filter(l => l.id !== item.id)
+                    
+                    showToast('info', 'Funds in Escrow', `₹${totalCost.toFixed(2)} locked in Escrow. Awaiting Smart Meter physical flow verification.`)
+                    
+                    // Phase 2: Simulate Smart Meter verifying the energy flowed
+                    setTimeout(async () => {
+                        escrowBalance.value -= totalCost
+                        await addTransaction('buy', item.units, item.price, totalCost, item.sellerName)
+                        showToast('success', 'Trade Settled', `Smart meter verified transfer of ${item.units.toFixed(1)} kWh. Escrow released to seller.`)
+                    }, 4000)
+                }
+
+                const listEnergy = async () => {
+                    if (!isSellFormValid.value) return
+                    
+                    const totalEarning = sellForm.value.units * sellForm.value.price
+                    const unitsSold = sellForm.value.units
+                    const commission = unitsSold * 0.25
+                    const netEarnings = totalEarning - commission
+                    
+                    liveMeterSurplus.value -= unitsSold
+                    
+                    showToast('success', 'Surplus Listed', `${unitsSold.toFixed(1)} kWh successfully published to P2P network.`)
+                    
+                    sellForm.value.units = Math.min(5.0, liveMeterSurplus.value > 0 ? liveMeterSurplus.value : 0)
+                    if(sellForm.value.units === 0) sellForm.value.units = ''
+
+                    // Simulate someone buying it after a few seconds
+                    setTimeout(async () => {
+                        balance.value += netEarnings
+                        await addTransaction('sell', unitsSold, sellForm.value.price, totalEarning, 'B-205 (Neighbor)', commission)
+                        showToast('success', 'Energy Sold via Escrow!', `A neighbor purchased ${unitsSold.toFixed(1)} kWh. Platform took ₹${commission.toFixed(2)}. Net ₹${netEarnings.toFixed(2)} credited from Escrow.`)
+                    }, 5000)
+                }
+
+                onMounted(() => {
+                    document.addEventListener('click', closeMenus)
+                    
+                    // Load history from local storage
+                    const savedHistory = localStorage.getItem('solarshare_history')
+                    if (savedHistory) {
+                        history.value = JSON.parse(savedHistory)
+                    }
+                    
+                    const savedNotifs = localStorage.getItem('solarshare_notifications')
+                    if (savedNotifs) {
+                        notificationHistory.value = JSON.parse(savedNotifs)
+                    }
+
+                    // Setup initial mock data quietly (no toast for initial load)
+                    if(marketListings.value.length === 0) {
+                        const names = ["A-402 (Sharma)", "B-105 (Gupta)"]
+                        names.forEach((name, i) => {
+                            marketListings.value.push({
+                                id: Date.now().toString() + i,
+                                sellerName: name,
+                                distance: (12 + i * 15) + "m",
+                                units: 3.5 + i,
+                                price: 5.50
+                            })
+                        })
+                    }
+                    
+                    // Simulate market activity every 30 seconds
+                    setInterval(() => {
+                        if (Math.random() > 0.5 && marketListings.value.length < 6) {
+                            generateMockListing()
+                        }
+                    }, 30000)
+                })
+
+                return {
+                    isDark, toggleTheme, currentTab, tabs, balance, escrowBalance, liveMeterSurplus,
+                    marketListings, history, buyEnergy, listEnergy, sellForm, isSellFormValid,
+                    toasts, removeToast, generateMockListing, refreshMarket, addFunds, clearHistory,
+                    showProfile, showNotifications, toggleProfile, toggleNotifications,
+                    userProfile, notificationHistory, unreadCount, markAllRead
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
