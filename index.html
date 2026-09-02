@@ -7,6 +7,12 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SolarShare — P2P Renewable Energy Trading</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {} }
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap"
@@ -90,17 +96,9 @@
       display: inline-block;
     }
 
-    /* Dark Mode Overrides */
-    html.dark body { background-color: #0b1c30 !important; color: #f8fafc !important; }
-    html.dark .bg-\[\#f8f9ff\], html.dark .bg-\[\#f0f7f0\] { background-color: #0f172a !important; }
-    html.dark .bg-white { background-color: #1e293b !important; border-color: #334155 !important; }
-    html.dark .text-\[\#0b1c30\] { color: #f8fafc !important; }
-    html.dark .text-slate-700, html.dark .text-\[\#565e74\] { color: #e2e8f0 !important; }
-    html.dark .text-slate-600, html.dark .text-slate-500 { color: #94a3b8 !important; }
-    html.dark .border, html.dark .border-b, html.dark .border-t, html.dark .border-slate-100, html.dark .border-slate-200 { border-color: #334155 !important; }
-    html.dark .bg-emerald-50, html.dark .bg-slate-100, html.dark .bg-slate-200 { background-color: #334155 !important; color: #f8fafc !important; }
-    html.dark .glass-panel { background: rgba(30, 41, 59, 0.85) !important; border-color: rgba(255, 255, 255, 0.1) !important; }
-    html.dark .shadow-sm, html.dark .shadow-md, html.dark .shadow-lg, html.dark .shadow-xl, html.dark .shadow-2xl { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important; }
+    /* Dark mode body base */
+    html.dark body { background-color: #0b1c30; color: #f8fafc; }
+    html.dark .glass-panel { background: rgba(15, 23, 42, 0.85); border-color: rgba(255,255,255,0.08); }
   </style>
 </head>
 
@@ -279,55 +277,56 @@
 
       return (
         <I18nContext.Provider value={lang}>
-        <div className="w-full min-h-screen bg-[#f8f9ff] flex flex-col font-sans relative dark:bg-[#0b1c30] transition-colors">
-          <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-[150] flex flex-col gap-2 pointer-events-none">
-            {toasts.map(t => (
-              <div key={t.id} className={`p-4 ${t.type === 'err' ? 'bg-red-700' : 'bg-[#006e2f]'} text-white rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto border border-white/20 animate-screen`}>
-                <span className="material-symbols-outlined text-[22px]">{t.type === 'err' ? 'error' : 'check_circle'}</span>
-                <span className="text-[14px] font-semibold flex-1">{t.msg}</span>
-              </div>
-            ))}
-          </div>
-
-          {showFunds && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-                <div className="flex justify-between items-center pb-2 border-b">
-                  <h3 className="text-[18px] font-bold">Top Up Wallet</h3>
-                  <button onClick={() => setShowFunds(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">close</span></button>
+          <div className="w-full min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] flex flex-col font-sans relative transition-colors">
+            <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-[150] flex flex-col gap-2 pointer-events-none">
+              {toasts.map(t => (
+                <div key={t.id} className={`p-4 ${t.type === 'err' ? 'bg-red-700' : 'bg-[#006e2f]'} text-white rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto border border-white/20 animate-screen`}>
+                  <span className="material-symbols-outlined text-[22px]">{t.type === 'err' ? 'error' : 'check_circle'}</span>
+                  <span className="text-[14px] font-semibold flex-1">{t.msg}</span>
                 </div>
-                <input type="number" value={fundsAmt} onChange={e => setFundsAmt(e.target.value)} className="w-full h-13 px-4 rounded-xl border border-slate-300 text-[20px] font-bold focus:outline-none input-focus-ring" />
-                <div className="grid grid-cols-3 gap-2">
-                  {['250', '500', '1000'].map(a => (
-                    <button key={a} onClick={() => setFundsAmt(a)} className={`py-2 rounded-xl text-xs font-bold ${fundsAmt === a ? 'bg-[#006e2f] text-white' : 'bg-slate-100 text-slate-700'}`}>+₹{a}</button>
-                  ))}
-                </div>
-                <button onClick={handleTopUp} className="w-full h-12 bg-[#22c55e] hover:bg-[#006e2f] text-white font-bold rounded-xl flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>Add to Wallet
-                </button>
-              </div>
+              ))}
             </div>
-          )}
 
-          <Sidebar isOpen={showSidebar} onClose={() => setShowSidebar(false)} onNavigate={(scr) => { setScreen(scr); setShowSidebar(false); }} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} lang={lang} onLangChange={setLang} />
+            {showFunds && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+                  <div className="flex justify-between items-center pb-2 border-b dark:border-slate-700">
+                    <h3 className="text-[18px] font-bold dark:text-white">Top Up Wallet</h3>
+                    <button onClick={() => setShowFunds(false)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center dark:text-white"><span className="material-symbols-outlined text-[20px]">close</span></button>
+                  </div>
+                  <input type="number" value={fundsAmt} onChange={e => setFundsAmt(e.target.value)} className="w-full h-13 px-4 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white text-[20px] font-bold focus:outline-none input-focus-ring" />
+                  <div className="grid grid-cols-3 gap-2">
+                    {['250', '500', '1000'].map(a => (
+                      <button key={a} onClick={() => setFundsAmt(a)} className={`py-2 rounded-xl text-xs font-bold ${fundsAmt === a ? 'bg-[#006e2f] text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>+₹{a}</button>
+                    ))}
+                  </div>
+                  <button onClick={handleTopUp} className="w-full h-12 bg-[#22c55e] hover:bg-[#006e2f] text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>Add to Wallet
+                  </button>
+                </div>
+              </div>
+            )}
 
-          {screen === 'login' && <LoginScreen onNavigate={setScreen} onLogin={handleLogin} />}
-          {screen === 'create_account' && <CreateAccountScreen onNavigate={setScreen} onSignup={handleSignup} />}
-          {screen === 'home' && profile && <HomeScreen profile={profile} setProfile={setProfile} sellers={sellers} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSelectSeller={id => { setSelSellerId(id); setScreen('marketplace'); }} onToggleSidebar={() => setShowSidebar(true)} />}
-          {screen === 'marketplace' && profile && <MarketScreen sellers={sellers} userBal={profile.balance || 0} initSellerId={selSellerId} onBuy={handleBuy} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
-          {screen === 'sell_surplus' && profile && <SellScreen surplus={profile.surplus || 0} onSell={handleSell} onNavigate={setScreen} />}
-          {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSignOut={handleSignOut} />}
-          {screen === 'transactions' && <TxScreen txns={txns} onNavigate={setScreen} />}
-          {screen === 'energy_dashboard' && profile && <EnergyDashboard profile={profile} onNavigate={setScreen} onToggleSidebar={() => setShowSidebar(true)} />}
-          {screen === 'personal_info' && profile && <PersonalInfoScreen profile={profile} onNavigate={setScreen} />}
-          {screen === 'smart_meter' && profile && <SmartMeterScreen profile={profile} onNavigate={setScreen} />}
-          {screen === 'payment_methods' && profile && <PaymentMethodsScreen userBal={profile.balance || 0} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
-          {screen === 'notifications' && <NotificationsScreen onNavigate={setScreen} />}
-          {screen === 'help' && <HelpSupportScreen onNavigate={setScreen} />}
-        </div>
+            <Sidebar isOpen={showSidebar} onClose={() => setShowSidebar(false)} onNavigate={(scr) => { setScreen(scr); setShowSidebar(false); }} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} lang={lang} onLangChange={setLang} />
+
+            {screen === 'login' && <LoginScreen onNavigate={setScreen} onLogin={handleLogin} />}
+            {screen === 'create_account' && <CreateAccountScreen onNavigate={setScreen} onSignup={handleSignup} />}
+            {screen === 'home' && profile && <HomeScreen profile={profile} setProfile={setProfile} sellers={sellers} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSelectSeller={id => { setSelSellerId(id); setScreen('marketplace'); }} onToggleSidebar={() => setShowSidebar(true)} />}
+            {screen === 'marketplace' && profile && <MarketScreen sellers={sellers} userBal={profile.balance || 0} initSellerId={selSellerId} onBuy={handleBuy} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
+            {screen === 'sell_surplus' && profile && <SellScreen surplus={profile.surplus || 0} onSell={handleSell} onNavigate={setScreen} />}
+            {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSignOut={handleSignOut} />}
+            {screen === 'transactions' && <TxScreen txns={txns} onNavigate={setScreen} />}
+            {screen === 'energy_dashboard' && profile && <EnergyDashboard profile={profile} onNavigate={setScreen} onToggleSidebar={() => setShowSidebar(true)} />}
+            {screen === 'personal_info' && profile && <PersonalInfoScreen profile={profile} onNavigate={setScreen} />}
+            {screen === 'smart_meter' && profile && <SmartMeterScreen profile={profile} onNavigate={setScreen} />}
+            {screen === 'payment_methods' && profile && <PaymentMethodsScreen userBal={profile.balance || 0} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
+            {screen === 'notifications' && <NotificationsScreen onNavigate={setScreen} />}
+            {screen === 'help' && <HelpSupportScreen onNavigate={setScreen} />}
+          </div>
         </I18nContext.Provider>
       );
     }
+
 
     function LoginScreen({ onNavigate, onLogin }) {
       const [email, setEmail] = useState(''); const [pass, setPass] = useState(''); const [loading, setLoading] = useState(false); const [err, setErr] = useState('');
@@ -488,15 +487,17 @@
               </button>
             </div>
             <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center transition-colors">
-              <button onClick={onToggleDark} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-emerald-600 transition-colors">
-                <span className="material-symbols-outlined text-[20px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+              <button onClick={onToggleDark} className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl">
+                <span className="material-symbols-outlined text-[18px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+                <span className="text-xs font-bold">{darkMode ? 'Light' : 'Dark'}</span>
               </button>
-              <select value={lang} onChange={e => onLangChange(e.target.value)} className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold px-2 py-1.5 rounded-lg border-none outline-none focus:ring-2 focus:ring-emerald-500">
+              <select value={lang} onChange={e => onLangChange(e.target.value)} className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold px-2 py-2 rounded-xl border-none outline-none focus:ring-2 focus:ring-emerald-500">
                 <option value="en">English</option>
                 <option value="hi">हिंदी</option>
                 <option value="mr">मराठी</option>
               </select>
             </div>
+
           </div>
         </div>
       );
