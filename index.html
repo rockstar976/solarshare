@@ -6,13 +6,41 @@
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SolarShare — P2P Renewable Energy Trading</title>
+
+  <!-- Google Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-    rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  
+  <!-- Hidden Google Translate Element Setup -->
+  <style>
+    /* Completely hide Google Translate UI elements */
+    .goog-te-banner-frame, .VIpgJd-ZVi9od-ORHb-OEVmcd { display: none !important; }
+    #google_translate_element { display: none !important; }
+    body { top: 0 !important; position: static !important; }
+    .skiptranslate iframe { display: none !important; }
+    /* Hide hover popup original text */
+    .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; border: none !important; }
+  </style>
+  <div id="google_translate_element"></div>
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({pageLanguage: 'en', autoDisplay: false}, 'google_translate_element');
+    }
+  </script>
+  <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+  <!-- React & Babel -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -67,15 +95,18 @@
         transform: translateX(20px)
       }
 
-      to {
-        opacity: 1;
-        transform: translateX(0)
-      }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
-    .animate-screen {
-      animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    .animate-screen { animation: fadeUp 0.4s ease-out forwards; }
+    
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 15px rgba(34,197,94,0.2); }
+      50% { box-shadow: 0 0 30px rgba(34,197,94,0.6); }
     }
+    .smart-meter-glow { animation: pulse-glow 2s infinite; border: 2px solid #22c55e; }
 
     @keyframes spin {
       to {
@@ -123,7 +154,7 @@
         if (error || !data) {
           console.error("Profile Error, trying to auto-create:", error);
           const mockProfile = { id: uid, name: sessionUser?.user_metadata?.name || 'Demo User', role: sessionUser?.user_metadata?.role || 'Prosumer', flat_no: sessionUser?.user_metadata?.flat_no || 'A-101', meter_id: 'SM-AUTO', discom: 'BSES', balance: 150.00, surplus: 5.0 };
-          await sb.from('profiles').insert(mockProfile).catch(e => console.log(e)); // try inserting quietly
+          await sb.from('profiles').insert(mockProfile).catch(e => console.log(e));
           setProfile(mockProfile);
           toast("Connected to Demo Profile", "ok");
         } else {
@@ -151,8 +182,6 @@
             await loadTxns(session.user.id);
             await loadMarket();
             setScreen('home'); setReady(true);
-            
-            // Subscribe to realtime
             sb.channel('ss-mkt')
               .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'market_listings', filter: 'status=eq.active' }, p => {
                 const l = p.new;
@@ -168,15 +197,18 @@
             setAuthUser(null); setProfile(null); setTxns([]); setSellers([]); setScreen('login'); setReady(true);
           }
         });
-        sb.auth.getSession().then(async ({ data: { session } }) => { 
-          if (!session) { setReady(true); } 
+        sb.auth.getSession().then(async ({ data: { session }, error }) => { 
+          if (error || !session) { setReady(true); } 
           else {
             setAuthUser(session.user);
-            await loadProfile(session.user.id, session.user);
-            await loadTxns(session.user.id);
-            await loadMarket();
+            await loadProfile(session.user.id, session.user).catch(console.error);
+            await loadTxns(session.user.id).catch(console.error);
+            await loadMarket().catch(console.error);
             setScreen('home'); setReady(true);
           }
+        }).catch((err) => {
+          console.error("Session fetch failed", err);
+          setReady(true);
         });
       }, []);
 
@@ -194,17 +226,13 @@
 
       const handleBuy = async (seller, kwh, energyCost) => {
         if (!authUser || !profile) return;
-        const totalCost = energyCost + (kwh * 0.21); // Add buyer platform fee 0.21/unit
+        const totalCost = energyCost + (kwh * 0.21);
         const newBal = Math.max(0, profile.balance - totalCost);
-        
-        // Optimistic UI Update
         setProfile(p => ({ ...p, balance: newBal })); 
         setSellers(p => p.filter(s => s.id !== seller.id)); 
         const tx = { id: `tx-${Date.now()}`, user_id: authUser.id, type: 'bought', title: `Bought from ${seller.name}`, kwh, price_per_kwh: seller.pricePerKwh, amount: totalCost, hash: `0x${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`, date_label: 'Just now', counterparty: seller.name, status: 'Completed' };
         setTxns(p => [tx, ...p]);
         toast(`Purchased ${kwh} kWh from ${seller.name} (₹${totalCost.toFixed(2)})`);
-
-        // Try DB Update
         try {
           await sb.from('profiles').update({ balance: newBal }).eq('id', authUser.id);
           await sb.from('market_listings').update({ status: 'sold' }).eq('id', seller.id);
@@ -216,16 +244,13 @@
         if (!authUser || !profile) return;
         const newSurplus = Math.max(0, (profile.surplus || 0) - units);
         const newBal = (profile.balance || 0) + net;
-        const listing = { id: `listing-${Date.now()}`, seller_id: authUser.id, seller_name: profile.name, units, price, distance: '0.1km', location: profile.flat_no || 'Your Block', status: 'active', rating: 5.0 };
-        
-        // Optimistic UI Update
+        const randomDist = (Math.random() * 2.0 + 0.1).toFixed(1) + 'km';
+        const listing = { id: `listing-${Date.now()}`, seller_id: authUser.id, seller_name: profile.name, units, price, distance: randomDist, location: profile.flat_no || 'Your Block', status: 'active', rating: 5.0 };
         setProfile(p => ({ ...p, surplus: newSurplus, balance: newBal })); 
         const tx = { id: `tx-${Date.now()}`, user_id: authUser.id, type: 'sold', title: 'Published to P2P Microgrid', kwh: units, price_per_kwh: price, amount: net, hash: `0x${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`, date_label: 'Just now', counterparty: 'P2P Grid', status: 'Completed' };
         setTxns(p => [tx, ...p]);
         setSellers(prev => [{ id: listing.id, name: listing.seller_name, location: listing.location, distance: listing.distance, kwh: listing.units, pricePerKwh: listing.price, rating: 5.0, verified: true, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev]);
         toast(`Listed ${units} kWh @ ₹${price.toFixed(2)}/u (+₹${net.toFixed(2)})`);
-
-        // Try DB Update
         try {
           await sb.from('market_listings').insert(listing);
           await sb.from('profiles').update({ surplus: newSurplus, balance: newBal }).eq('id', authUser.id);
@@ -243,11 +268,10 @@
       };
 
       if (!ready) return (
-        <div className="min-h-screen bg-[#f8f9ff] flex flex-col items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center mb-4">
-            <span className="material-symbols-outlined text-[#006e2f] text-[32px] spin">solar_power</span>
-          </div>
-          <p className="text-slate-500 text-sm font-medium">Loading SolarShare...</p>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1c30] text-white">
+          <span className="spin material-symbols-outlined text-[64px] text-[#22c55e] mb-6 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]">solar_power</span>
+          <h2 className="text-[20px] font-bold animate-pulse tracking-wide">Connecting to Grid...</h2>
+          <p className="text-sm text-slate-400 mt-2">Authenticating secure connection</p>
         </div>
       );
 
@@ -287,13 +311,18 @@
           {screen === 'home' && profile && <HomeScreen profile={profile} setProfile={setProfile} sellers={sellers} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSelectSeller={id => { setSelSellerId(id); setScreen('marketplace'); }} />}
           {screen === 'marketplace' && profile && <MarketScreen sellers={sellers} userBal={profile.balance || 0} initSellerId={selSellerId} onBuy={handleBuy} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
           {screen === 'sell_surplus' && profile && <SellScreen surplus={profile.surplus || 0} onSell={handleSell} onNavigate={setScreen} />}
-          {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSignOut={handleSignOut} />}
+          {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => { setScreen('home'); toast("Select 'Add Funds' from Home."); }} onSignOut={handleSignOut} />}
+          {screen === 'profile_personal' && <PersonalInfoScreen profile={profile} authUser={authUser} onNavigate={setScreen} />}
+          {screen === 'profile_meter' && <SmartMeterScreen profile={profile} onNavigate={setScreen} />}
+          {screen === 'profile_payment' && <PaymentMethodsScreen onNavigate={setScreen} />}
+          {screen === 'profile_notifications' && <NotificationsScreen onNavigate={setScreen} />}
+          {screen === 'profile_help' && <HelpSupportScreen onNavigate={setScreen} />}
+          {screen === 'profile_language' && <LanguageScreen onNavigate={setScreen} />}
           {screen === 'transactions' && <TxScreen txns={txns} onNavigate={setScreen} />}
         </div>
       );
     }
 
-    // LOGIN
     function LoginScreen({ onNavigate, onLogin }) {
       const [email, setEmail] = useState(''); const [pass, setPass] = useState(''); const [loading, setLoading] = useState(false); const [err, setErr] = useState('');
       const submit = async e => { e.preventDefault(); setLoading(true); setErr(''); const ok = await onLogin(email, pass); if (!ok) setErr('Invalid email or password.'); setLoading(false); };
@@ -334,7 +363,6 @@
       );
     }
 
-    // CREATE ACCOUNT
     function CreateAccountScreen({ onNavigate, onSignup }) {
       const [f, setF] = useState({ fullName: '', email: '', password: '', unit: '', role: 'Prosumer', meterId: '', discom: 'BSES Rajdhani' });
       const [loading, setLoading] = useState(false); const [msg, setMsg] = useState('');
@@ -374,20 +402,14 @@
       );
     }
 
-    // HOME
     function HomeScreen({ profile, setProfile, sellers, onNavigate, onAddFunds, onSelectSeller }) {
       const simulateGen = async () => {
         const newSurplus = (profile.surplus || 0) + 1.5;
-        // Update local state immediately so UI reflects the change
         if (setProfile) setProfile(p => ({ ...p, surplus: newSurplus }));
-        
-        // Try updating the DB if the profile actually exists, but don't reload
         if (profile.id) {
           try {
             await sb.from('profiles').update({ surplus: newSurplus }).eq('id', profile.id);
-          } catch (e) {
-            console.error("DB update failed (probably dummy profile)", e);
-          }
+          } catch (e) { console.error("DB update failed", e); }
         }
       };
 
@@ -400,7 +422,7 @@
               <span>₹{(profile.balance || 0).toFixed(2)}</span>
             </button>
           </header>
-          <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-5">
+          <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-5 animate-fade-up">
             <div className="flex justify-between items-center">
               <div>
                 <h2 className="text-[24px] font-bold text-[#0b1c30]">Welcome, {(profile.name || 'User').split(' ')[0]} 👋</h2>
@@ -408,13 +430,12 @@
               </div>
               <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-bold uppercase">{profile.role}</span>
             </div>
-            <div className="glass-panel rounded-3xl p-5 border shadow-sm energy-glow bg-gradient-to-br from-white to-emerald-50/40">
+            <div className="glass-panel rounded-3xl p-5 border shadow-sm energy-glow bg-gradient-to-br from-white to-emerald-50/40 animate-fade-up">
               <div className="flex justify-between items-start mb-3">
-                <div>
-                  <span className="text-[11px] font-bold uppercase text-slate-500 tracking-wider block">Wallet Balance</span>
-                  <h3 className="text-[32px] font-extrabold text-[#006e2f] tracking-tight">₹{(profile.balance || 0).toFixed(2)}</h3>
-                </div>
-                <button onClick={onAddFunds} className="px-4 py-2 bg-[#006e2f] text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-sm"><span className="material-symbols-outlined text-[16px]">add</span><span>Add Funds</span></button>
+                <div><h3 className="font-bold text-slate-500 text-xs uppercase tracking-wider">Live Smart Meter</h3><div className="text-[40px] font-black text-[#006e2f] leading-none mt-1">{(profile.surplus || 0).toFixed(1)} <span className="text-base font-normal text-slate-500">kWh</span></div></div>
+                <button onClick={simulateGen} className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center border text-[#22c55e] hover:bg-emerald-50 smart-meter-glow transition-all" title="Simulate Solar Generation">
+                  <span className="material-symbols-outlined text-[24px]">solar_power</span>
+                </button>
               </div>
               <div className="flex justify-between items-center pt-3 border-t border-slate-200/80 text-xs text-slate-600">
                 <span>Meter ID: <b className="font-mono">{profile.meter_id || 'N/A'}</b></span>
@@ -464,14 +485,28 @@
 
     // MARKET
     function MarketScreen({ sellers, userBal, initSellerId, onBuy, onNavigate, onAddFunds }) {
-      const [search, setSearch] = useState(''); const [filter, setFilter] = useState('All'); const [sel, setSel] = useState(null); const [kwh, setKwh] = useState(2); const [proc, setProc] = useState(false);
+      const [search, setSearch] = useState(''); const [filter, setFilter] = useState('All'); const [sel, setSel] = useState(null); const [kwh, setKwh] = useState(2); const [procState, setProcState] = useState('');
       useEffect(() => { if (initSellerId) { const m = sellers.find(s => s.id === initSellerId); if (m) setSel(m); } }, [initSellerId, sellers]);
       const filtered = sellers.filter(s => { const q = s.name.toLowerCase().includes(search.toLowerCase()) || (s.location || '').toLowerCase().includes(search.toLowerCase()); if (!q) return false; if (filter === 'Nearby') return parseFloat(s.distance) <= 0.5; return true; }).sort((a, b) => filter === 'Lowest Price' ? a.pricePerKwh - b.pricePerKwh : 0);
       const cost = sel ? Number((kwh * sel.pricePerKwh).toFixed(2)) : 0; 
       const totalFee = kwh * 0.21;
       const finalCost = cost + totalFee;
       const insuf = finalCost > userBal;
-      const confirm = () => { if (!sel || insuf) return; setProc(true); setTimeout(async () => { await onBuy(sel, kwh, cost); setProc(false); setSel(null); }, 600); };
+      const confirm = () => { 
+        if (!sel || insuf) return; 
+        setProcState('Locating Seller...'); 
+        setTimeout(() => {
+          setProcState('Verifying Grid Connection...');
+          setTimeout(async () => {
+            setProcState('Transferring Energy...');
+            setTimeout(async () => {
+              await onBuy(sel, kwh, cost); 
+              setProcState(''); 
+              setSel(null); 
+            }, 800);
+          }, 800);
+        }, 800);
+      };
       return (
         <div className="flex-1 flex flex-col pb-24 animate-screen">
           <header className="sticky top-0 z-40 bg-[#f8f9ff]/90 backdrop-blur-md px-5 h-16 border-b flex items-center justify-between">
@@ -495,13 +530,23 @@
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
               <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
                 <div className="flex justify-between items-center pb-2 border-b"><h3 className="font-bold text-[18px]">Confirm Purchase</h3><button onClick={() => setSel(null)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">close</span></button></div>
-                <div className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-100"><img src={sel.avatar} alt={sel.name} className="w-10 h-10 rounded-full" /><div><h5 className="font-bold text-sm">{sel.name}</h5><p className="text-xs text-slate-500">₹{sel.pricePerKwh.toFixed(2)}/kWh</p></div></div>
-                <div><label className="text-xs font-bold text-slate-600 block mb-1">Select Units (kWh)</label><div className="flex items-center gap-2"><button onClick={() => setKwh(p => Math.max(0.5, Number((p - 0.5).toFixed(1))))} className="w-11 h-11 bg-slate-100 rounded-xl font-bold text-lg">-</button><input type="number" step="0.5" min="0.5" max={sel.kwh} value={kwh} onChange={e => setKwh(Math.min(sel.kwh, Math.max(0.5, parseFloat(e.target.value) || 0.5)))} className="w-full h-11 border text-center font-bold rounded-xl" /><button onClick={() => setKwh(p => Math.min(sel.kwh, Number((p + 0.5).toFixed(1))))} className="w-11 h-11 bg-slate-100 rounded-xl font-bold text-lg">+</button></div></div>
-                <div className="bg-slate-50 p-3 rounded-xl space-y-1.5 text-xs text-slate-600"><div className="flex justify-between"><span>Energy Cost:</span><span className="font-bold text-slate-800">₹{cost.toFixed(2)}</span></div><div className="flex justify-between"><span>Platform Fee:</span><span className="text-emerald-600 font-bold">₹{totalFee.toFixed(2)}</span></div><div className="flex justify-between pt-1 border-t text-sm font-black text-[#006e2f]"><span>Total:</span><span>₹{finalCost.toFixed(2)}</span></div></div>
-                {insuf && <div className="p-2.5 bg-red-50 text-red-700 text-xs rounded-xl flex justify-between items-center"><span>Insufficient balance</span><button onClick={() => { setSel(null); onAddFunds(); }} className="font-bold underline">Add Funds</button></div>}
-                <button disabled={insuf || proc} onClick={confirm} className={`w-full h-12 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 ${insuf ? 'bg-slate-300' : 'bg-[#22c55e] hover:bg-[#006e2f]'}`}>
-                  {proc && <span className="spin material-symbols-outlined text-[20px]">autorenew</span>}{proc ? 'Settling...' : 'Confirm & Pay ₹' + finalCost.toFixed(2)}
-                </button>
+                {procState ? (
+                  <div className="py-10 flex flex-col items-center justify-center text-center animate-fade-up">
+                    <span className="spin material-symbols-outlined text-[56px] text-[#22c55e] mb-4">autorenew</span>
+                    <h4 className="font-bold text-[20px] text-slate-800">{procState}</h4>
+                    <p className="text-sm text-slate-500 mt-2">Securing P2P blockchain transaction...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3 p-3 bg-emerald-50/50 rounded-2xl border border-emerald-100"><img src={sel.avatar} alt={sel.name} className="w-10 h-10 rounded-full" /><div><h5 className="font-bold text-sm">{sel.name}</h5><p className="text-xs text-slate-500">₹{sel.pricePerKwh.toFixed(2)}/kWh</p></div></div>
+                    <div><label className="text-xs font-bold text-slate-600 block mb-1">Select Units (kWh)</label><div className="flex items-center gap-2"><button onClick={() => setKwh(p => Math.max(0.5, Number((p - 0.5).toFixed(1))))} className="w-11 h-11 bg-slate-100 rounded-xl font-bold text-lg">-</button><input type="number" step="0.5" min="0.5" max={sel.kwh} value={kwh} onChange={e => setKwh(Math.min(sel.kwh, Math.max(0.5, parseFloat(e.target.value) || 0.5)))} className="w-full h-11 border text-center font-bold rounded-xl" /><button onClick={() => setKwh(p => Math.min(sel.kwh, Number((p + 0.5).toFixed(1))))} className="w-11 h-11 bg-slate-100 rounded-xl font-bold text-lg">+</button></div></div>
+                    <div className="bg-slate-50 p-3 rounded-xl space-y-1.5 text-xs text-slate-600"><div className="flex justify-between"><span>Energy Cost:</span><span className="font-bold text-slate-800">₹{cost.toFixed(2)}</span></div><div className="flex justify-between"><span>Platform Fee:</span><span className="text-emerald-600 font-bold">₹{totalFee.toFixed(2)}</span></div><div className="flex justify-between pt-1 border-t text-sm font-black text-[#006e2f]"><span>Total:</span><span>₹{finalCost.toFixed(2)}</span></div></div>
+                    {insuf && <div className="p-2.5 bg-red-50 text-red-700 text-xs rounded-xl flex justify-between items-center"><span>Insufficient balance</span><button onClick={() => { setSel(null); onAddFunds(); }} className="font-bold underline">Add Funds</button></div>}
+                    <button disabled={insuf} onClick={confirm} className={`w-full h-12 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 ${insuf ? 'bg-slate-300' : 'bg-[#22c55e] hover:bg-[#006e2f] shadow-lg transition-transform active:scale-95'}`}>
+                      Confirm & Pay ₹{finalCost.toFixed(2)}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -553,23 +598,172 @@
     // PROFILE
     function ProfileScreen({ profile, onNavigate, onAddFunds, onSignOut }) {
       const av = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=22c55e&color=fff&bold=true&size=128`;
+      const menu = [
+        { id: 'profile_language', icon: 'translate', label: 'Language / भाषा' },
+        { id: 'profile_personal', icon: 'person', label: 'Personal Info' },
+        { id: 'profile_meter', icon: 'speed', label: 'Smart Meter' },
+        { id: 'profile_payment', icon: 'credit_card', label: 'Payment Methods' },
+        { id: 'profile_notifications', icon: 'notifications', label: 'Notifications' },
+        { id: 'profile_help', icon: 'help', label: 'Help & Support' }
+      ];
       return (
         <div className="flex-1 flex flex-col pb-24 animate-screen">
           <header className="sticky top-0 z-40 bg-[#f8f9ff]/90 backdrop-blur-md px-5 h-16 border-b flex items-center justify-between"><h1 className="text-[18px] font-bold text-[#006e2f]">My Profile</h1></header>
           <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-5">
             <div className="flex flex-col items-center text-center"><img src={av} alt={profile.name} className="w-24 h-24 rounded-full border-4 border-white shadow-md mb-2" /><h2 className="text-[22px] font-bold text-[#0b1c30]">{profile.name}</h2><p className="text-xs text-slate-500">{profile.role} • {profile.flat_no}</p><span className="mt-1 text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">{profile.discom}</span></div>
-            <div className="bg-white p-5 rounded-3xl border shadow-sm"><div className="flex justify-between items-center"><div><span className="text-xs text-slate-500 uppercase font-bold block">Wallet Balance</span><div className="text-[28px] font-black text-[#0b1c30]">₹{(profile.balance || 0).toFixed(2)}</div></div><button onClick={onAddFunds} className="px-4 py-2 bg-[#22c55e] text-white rounded-xl text-xs font-bold">Add Funds</button></div></div>
-            <div className="bg-white rounded-2xl border shadow-sm divide-y">
-              {[{ icon: 'speed', label: 'Smart Meter ID', value: profile.meter_id || 'N/A' }, { icon: 'bolt', label: 'Surplus Available', value: `${(profile.surplus || 0).toFixed(1)} kWh` }, { icon: 'electric_bolt', label: 'DISCOM', value: profile.discom || 'N/A' }].map(item => (
-                <div key={item.label} className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-full bg-emerald-50 text-[#006e2f] flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">{item.icon}</span></div><span className="text-sm font-medium text-slate-700">{item.label}</span></div>
-                  <span className="text-sm font-bold text-slate-900 font-mono">{item.value}</span>
-                </div>
+            <div className="bg-white p-5 rounded-3xl border shadow-sm"><div className="flex justify-between items-center"><div><span className="text-xs text-slate-500 uppercase font-bold block">Wallet Balance</span><div className="text-[28px] font-black text-[#0b1c30]">₹{(profile.balance || 0).toFixed(2)}</div></div><button onClick={onAddFunds} className="px-4 py-2 bg-[#22c55e] text-white rounded-xl text-xs font-bold shadow-sm">Add Funds</button></div></div>
+            
+            <div className="space-y-3">
+              {menu.map((m, i) => (
+                <button key={i} onClick={() => onNavigate(m.id)} className="w-full bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between active:scale-95 transition-transform hover:bg-slate-50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                      <span className="material-symbols-outlined text-[20px]">{m.icon}</span>
+                    </div>
+                    <span className="font-semibold text-slate-700 text-[15px]">{m.label}</span>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-400 text-[24px]">chevron_right</span>
+                </button>
               ))}
             </div>
-            <button onClick={onSignOut} className="w-full h-12 border border-red-200 text-red-600 rounded-xl font-bold text-sm hover:bg-red-50 transition-colors">Sign Out</button>
+
+            <button onClick={onSignOut} className="w-full h-14 border-2 border-red-100 text-red-600 rounded-2xl font-bold text-sm bg-red-50 hover:bg-red-100 transition-colors flex items-center justify-center gap-2 mt-2 shadow-sm"><span className="material-symbols-outlined text-[20px]">logout</span> Log Out</button>
           </main>
           <BottomNav current="profile" onNavigate={onNavigate} />
+        </div>
+      );
+    }
+
+    // PROFILE SUB-SCREENS
+    function PersonalInfoScreen({ profile, authUser, onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-slate-50 min-h-screen animate-screen">
+          <header className="flex justify-between items-center mb-6"><h1 className="text-[18px] font-bold text-slate-800">Personal Info</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white border shadow-sm rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="space-y-4">
+            <div className="bg-white p-4 border rounded-2xl shadow-sm"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Full Name</label><div className="font-semibold text-slate-800 text-[15px]">{profile.name}</div></div>
+            <div className="bg-white p-4 border rounded-2xl shadow-sm"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Email</label><div className="font-semibold text-slate-800 text-[15px]">{authUser?.email || 'N/A'}</div></div>
+            <div className="bg-white p-4 border rounded-2xl shadow-sm"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Role</label><div className="font-semibold text-slate-800 text-[15px]">{profile.role}</div></div>
+            <div className="bg-white p-4 border rounded-2xl shadow-sm"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">Flat / Location</label><div className="font-semibold text-slate-800 text-[15px]">{profile.flat_no}</div></div>
+            <div className="bg-white p-4 border rounded-2xl shadow-sm"><label className="text-xs font-bold text-slate-500 uppercase block mb-1">DISCOM</label><div className="font-semibold text-slate-800 text-[15px]">{profile.discom}</div></div>
+          </div>
+        </div>
+      );
+    }
+
+    function SmartMeterScreen({ profile, onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-[#0b1c30] text-white min-h-screen animate-screen relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-64 bg-emerald-500/10 blur-3xl rounded-full"></div>
+          <header className="flex justify-between items-center mb-8 relative z-10"><h1 className="text-[18px] font-bold text-emerald-400">Smart Meter</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white/10 border border-white/20 rounded-full flex items-center justify-center hover:bg-white/20"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="flex flex-col items-center flex-1 justify-center pb-20 relative z-10">
+            <div className="w-56 h-56 rounded-full border-[8px] border-emerald-500 flex flex-col items-center justify-center smart-meter-glow mb-10 bg-[#0a2333] shadow-2xl">
+              <span className="material-symbols-outlined text-[56px] text-emerald-400 mb-2">solar_power</span>
+              <span className="text-[48px] font-black leading-none">{Number(profile.surplus || 0).toFixed(1)}</span>
+              <span className="text-sm font-bold text-emerald-400/70 tracking-widest mt-1">kWh SURPLUS</span>
+            </div>
+            <div className="w-full bg-white/5 rounded-3xl p-6 border border-white/10 space-y-4 backdrop-blur-sm">
+              <div className="flex justify-between text-[15px]"><span className="text-white/60">Meter ID</span><span className="font-mono font-bold text-emerald-100">{profile.meter_id}</span></div>
+              <div className="flex justify-between text-[15px]"><span className="text-white/60">Grid Status</span><span className="text-emerald-400 font-bold flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span> Synchronized</span></div>
+              <div className="flex justify-between text-[15px]"><span className="text-white/60">Last Sync</span><span className="font-medium text-white/90">Just now</span></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function PaymentMethodsScreen({ onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-slate-50 min-h-screen animate-screen">
+          <header className="flex justify-between items-center mb-6"><h1 className="text-[18px] font-bold text-slate-800">Payment Methods</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white border shadow-sm rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="space-y-4">
+            <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
+              <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
+              <div className="flex justify-between items-center mb-8"><span className="material-symbols-outlined text-[32px] opacity-80">account_balance</span><span className="font-mono font-bold tracking-widest text-[16px]">**** 4392</span></div>
+              <div><div className="text-[11px] text-slate-400 uppercase tracking-widest mb-1">Primary Linked Account</div><div className="font-bold text-[20px]">HDFC Bank</div></div>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex justify-between items-center shadow-sm">
+              <div className="flex items-center gap-4"><span className="material-symbols-outlined text-emerald-600 bg-emerald-100 p-2.5 rounded-full text-[24px]">qr_code_scanner</span><div><h4 className="font-bold text-emerald-900 text-[15px]">UPI ID</h4><p className="text-xs text-emerald-700 mt-0.5">solarshare@upi</p></div></div>
+              <span className="material-symbols-outlined text-emerald-500 text-[24px]">check_circle</span>
+            </div>
+            <button onClick={() => toast("Redirecting to payment gateway...")} className="w-full h-16 bg-white border-2 border-dashed border-slate-300 text-slate-500 font-bold rounded-2xl flex justify-center items-center gap-2 hover:bg-slate-50 transition-colors mt-4"><span className="material-symbols-outlined">add</span> Link New Bank / UPI</button>
+          </div>
+        </div>
+      );
+    }
+
+    function NotificationsScreen({ onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-slate-50 min-h-screen animate-screen">
+          <header className="flex justify-between items-center mb-6"><h1 className="text-[18px] font-bold text-slate-800">Notifications</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white border shadow-sm rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="space-y-3">
+            <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-start gap-4"><span className="material-symbols-outlined text-emerald-500 bg-emerald-50 p-2.5 rounded-full">offline_bolt</span><div><h4 className="font-bold text-slate-800 text-[15px]">Grid Connection Active</h4><p className="text-sm text-slate-500 mt-1 leading-snug">Your smart meter is securely connected to the SolarShare P2P network.</p></div></div>
+            <div className="bg-white p-4 rounded-2xl border shadow-sm flex items-start gap-4"><span className="material-symbols-outlined text-blue-500 bg-blue-50 p-2.5 rounded-full">account_balance_wallet</span><div><h4 className="font-bold text-slate-800 text-[15px]">Welcome Bonus</h4><p className="text-sm text-slate-500 mt-1 leading-snug">₹150.00 has been credited to your SolarShare wallet to kickstart your trading.</p></div></div>
+          </div>
+        </div>
+      );
+    }
+
+    function HelpSupportScreen({ onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-slate-50 min-h-screen animate-screen">
+          <header className="flex justify-between items-center mb-6"><h1 className="text-[18px] font-bold text-slate-800">Help & Support</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white border shadow-sm rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="space-y-4">
+            <div className="bg-white p-6 rounded-3xl border shadow-sm text-center">
+              <span className="material-symbols-outlined text-[56px] text-blue-500 mb-3">support_agent</span>
+              <h3 className="font-bold text-slate-800 text-[20px] mb-2">How can we help?</h3>
+              <p className="text-sm text-slate-500 mb-6 leading-relaxed">Our support team is available 24/7 to help you with your smart meter and P2P trades.</p>
+              <button onClick={() => toast("Chat support connecting...")} className="w-full h-14 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 text-[15px] hover:bg-blue-700 shadow-md transition-colors"><span className="material-symbols-outlined text-[20px]">chat</span> Start Live Chat</button>
+            </div>
+            <div className="bg-white border rounded-3xl overflow-hidden shadow-sm mt-4">
+              <div className="p-4 border-b bg-slate-50 font-bold text-slate-800 text-[15px]">Frequently Asked Questions</div>
+              <div className="p-4 border-b text-sm text-slate-700"><span className="font-bold block mb-1">How is the platform fee calculated?</span><span className="text-slate-500 text-[13px] leading-relaxed block">We charge a flat ₹0.21 per kWh to maintain the grid infrastructure and facilitate blockchain contracts.</span></div>
+              <div className="p-4 text-sm text-slate-700"><span className="font-bold block mb-1">How do I withdraw my earnings?</span><span className="text-slate-500 text-[13px] leading-relaxed block">You can withdraw to your primary linked bank account or UPI directly from the Wallet section.</span></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function LanguageScreen({ onNavigate }) {
+      const langs = [
+        { code: 'en', name: 'English', native: 'English' },
+        { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+        { code: 'mr', name: 'Marathi', native: 'मराठी' },
+        { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
+        { code: 'ta', name: 'Tamil', native: 'தமிழ்' }
+      ];
+
+      const handleSelect = (code) => {
+        var selectField = document.querySelector("select.goog-te-combo");
+        if (selectField) {
+            selectField.value = code;
+            selectField.dispatchEvent(new Event('change'));
+            toast("Language updated! / भाषा बदल दी गई है!");
+            // Optional: short delay before nav back to see the change
+            setTimeout(() => onNavigate('profile'), 1200);
+        } else {
+            toast("Translation engine loading... Please wait.");
+        }
+      };
+
+      return (
+        <div className="flex-1 flex flex-col p-5 bg-slate-50 min-h-screen animate-screen">
+          <header className="flex justify-between items-center mb-6"><h1 className="text-[18px] font-bold text-slate-800">Language / भाषा</h1><button onClick={() => onNavigate('profile')} className="w-10 h-10 bg-white border shadow-sm rounded-full flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button></header>
+          <div className="grid gap-3">
+            {langs.map(l => (
+              <button key={l.code} onClick={() => handleSelect(l.code)} className="bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between hover:bg-emerald-50 active:scale-95 transition-all text-left">
+                <div>
+                  <div className="font-bold text-slate-800 text-[16px]">{l.native}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">{l.name}</div>
+                </div>
+                <span className="material-symbols-outlined text-emerald-500">translate</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-8 bg-emerald-50 text-emerald-900 p-4 rounded-2xl text-[13px] flex items-start gap-3 shadow-sm border border-emerald-100 leading-relaxed">
+            <span className="material-symbols-outlined text-[20px] text-emerald-600 mt-0.5">auto_awesome</span>
+            <p>Our real-time AI translation engine instantly localizes the entire SolarShare app to help users across Bharat easily trade energy in their native language.</p>
+          </div>
         </div>
       );
     }
