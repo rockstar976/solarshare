@@ -7,6 +7,12 @@
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>SolarShare — P2P Renewable Energy Trading</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: {} }
+    }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap"
@@ -62,10 +68,9 @@
     }
 
     @keyframes slideInRight {
-      from {
-        opacity: 0;
-        transform: translateX(20px)
-      }
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
 
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(15px); }
@@ -90,6 +95,10 @@
       animation: spin 1s linear infinite;
       display: inline-block;
     }
+
+    /* Dark mode body base */
+    html.dark body { background-color: #0b1c30; color: #f8fafc; }
+    html.dark .glass-panel { background: rgba(15, 23, 42, 0.85); border-color: rgba(255,255,255,0.08); }
   </style>
 </head>
 
@@ -103,6 +112,17 @@
       auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage }
     });
 
+    const TRANSLATIONS = {
+      en: { home: "Home", dashboard: "Real-Time Dashboard", marketplace: "Marketplace", sell_surplus: "Sell Surplus", transactions: "Transactions", profile: "Profile", dark_mode: "Dark Mode", light_mode: "Light Mode", welcome: "Welcome", live_meter: "Live Smart Meter", live_market: "Live Market", buy_energy: "Buy Energy", wallet: "Wallet Balance", add_funds: "Add Funds" },
+      hi: { home: "होम", dashboard: "रियल-टाइम डैशबोर्ड", marketplace: "मार्केटप्लेस", sell_surplus: "सरप्लस बेचें", transactions: "लेनदेन", profile: "प्रोफ़ाइल", dark_mode: "डार्क मोड", light_mode: "लाइट मोड", welcome: "नमस्ते", live_meter: "लाइव स्मार्ट मीटर", live_market: "लाइव मार्केट", buy_energy: "ऊर्जा खरीदें", wallet: "वॉलेट बैलेंस", add_funds: "पैसे डालें" },
+      mr: { home: "मुख्य पृष्ठ", dashboard: "रिअल-टाइम डॅशबोर्ड", marketplace: "मार्केटप्लेस", sell_surplus: "सरप्लस विका", transactions: "व्यवहार", profile: "प्रोफाइल", dark_mode: "डार्क मोड", light_mode: "लाईट मोड", welcome: "नमस्कार", live_meter: "लाईव्ह स्मार्ट मीटर", live_market: "लाईव्ह मार्केट", buy_energy: "ऊर्जा खरेदी करा", wallet: "वॉलेट शिल्लक", add_funds: "पैसे जोडा" }
+    };
+    const I18nContext = React.createContext('en');
+    function useTranslation() {
+      const lang = React.useContext(I18nContext) || 'en';
+      return (key) => TRANSLATIONS[lang]?.[key] || TRANSLATIONS['en']?.[key] || key;
+    }
+
     function App() {
       const [authUser, setAuthUser] = useState(null);
       const [profile, setProfile] = useState(null);
@@ -114,6 +134,14 @@
       const [showFunds, setShowFunds] = useState(false);
       const [fundsAmt, setFundsAmt] = useState('500');
       const [selSellerId, setSelSellerId] = useState(null);
+      const [showSidebar, setShowSidebar] = useState(false);
+      const [darkMode, setDarkMode] = useState(false);
+      const [lang, setLang] = useState('en');
+
+      useEffect(() => {
+        if (darkMode) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [darkMode]);
 
       const toast = (msg, type = 'ok') => {
         const id = Date.now();
@@ -241,93 +269,143 @@
 
       if (!ready) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1c30] text-white">
-          <span className="spin material-symbols-outlined text-[64px] text-[#22c55e] mb-6 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]">solar_power</span>
+          <img src="./logo.jpg" alt="SolarShare" className="w-24 h-24 object-contain mb-6 rounded-2xl drop-shadow-[0_0_20px_rgba(34,197,94,0.6)] spin" style={{animationDuration:'2s'}} />
           <h2 className="text-[20px] font-bold animate-pulse tracking-wide">Connecting to Grid...</h2>
           <p className="text-sm text-slate-400 mt-2">Authenticating secure connection</p>
         </div>
       );
 
       return (
-        <div className="w-full min-h-screen bg-[#f8f9ff] flex flex-col font-sans relative">
-          <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-[150] flex flex-col gap-2 pointer-events-none">
-            {toasts.map(t => (
-              <div key={t.id} className={`p-4 ${t.type === 'err' ? 'bg-red-700' : 'bg-[#006e2f]'} text-white rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto border border-white/20 animate-screen`}>
-                <span className="material-symbols-outlined text-[22px]">{t.type === 'err' ? 'error' : 'check_circle'}</span>
-                <span className="text-[14px] font-semibold flex-1">{t.msg}</span>
-              </div>
-            ))}
-          </div>
-
-          {showFunds && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
-                <div className="flex justify-between items-center pb-2 border-b">
-                  <h3 className="text-[18px] font-bold">Top Up Wallet</h3>
-                  <button onClick={() => setShowFunds(false)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">close</span></button>
+        <I18nContext.Provider value={lang}>
+          <div className="w-full min-h-screen bg-[#f8f9ff] dark:bg-[#0b1c30] flex flex-col font-sans relative transition-colors">
+            <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-[150] flex flex-col gap-2 pointer-events-none">
+              {toasts.map(t => (
+                <div key={t.id} className={`p-4 ${t.type === 'err' ? 'bg-red-700' : 'bg-[#006e2f]'} text-white rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto border border-white/20 animate-screen`}>
+                  <span className="material-symbols-outlined text-[22px]">{t.type === 'err' ? 'error' : 'check_circle'}</span>
+                  <span className="text-[14px] font-semibold flex-1">{t.msg}</span>
                 </div>
-                <input type="number" value={fundsAmt} onChange={e => setFundsAmt(e.target.value)} className="w-full h-13 px-4 rounded-xl border border-slate-300 text-[20px] font-bold focus:outline-none input-focus-ring" />
-                <div className="grid grid-cols-3 gap-2">
-                  {['250', '500', '1000'].map(a => (
-                    <button key={a} onClick={() => setFundsAmt(a)} className={`py-2 rounded-xl text-xs font-bold ${fundsAmt === a ? 'bg-[#006e2f] text-white' : 'bg-slate-100 text-slate-700'}`}>+₹{a}</button>
-                  ))}
-                </div>
-                <button onClick={handleTopUp} className="w-full h-12 bg-[#22c55e] hover:bg-[#006e2f] text-white font-bold rounded-xl flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>Add to Wallet
-                </button>
-              </div>
+              ))}
             </div>
-          )}
 
-          {screen === 'login' && <LoginScreen onNavigate={setScreen} onLogin={handleLogin} />}
-          {screen === 'create_account' && <CreateAccountScreen onNavigate={setScreen} onSignup={handleSignup} />}
-          {screen === 'home' && profile && <HomeScreen profile={profile} setProfile={setProfile} sellers={sellers} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSelectSeller={id => { setSelSellerId(id); setScreen('marketplace'); }} />}
-          {screen === 'marketplace' && profile && <MarketScreen sellers={sellers} userBal={profile.balance || 0} initSellerId={selSellerId} onBuy={handleBuy} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
-          {screen === 'sell_surplus' && profile && <SellScreen surplus={profile.surplus || 0} onSell={handleSell} onNavigate={setScreen} />}
-          {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSignOut={handleSignOut} />}
-          {screen === 'transactions' && <TxScreen txns={txns} onNavigate={setScreen} />}
-        </div>
+            {showFunds && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
+                  <div className="flex justify-between items-center pb-2 border-b dark:border-slate-700">
+                    <h3 className="text-[18px] font-bold dark:text-white">Top Up Wallet</h3>
+                    <button onClick={() => setShowFunds(false)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center dark:text-white"><span className="material-symbols-outlined text-[20px]">close</span></button>
+                  </div>
+                  <input type="number" value={fundsAmt} onChange={e => setFundsAmt(e.target.value)} className="w-full h-13 px-4 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white text-[20px] font-bold focus:outline-none input-focus-ring" />
+                  <div className="grid grid-cols-3 gap-2">
+                    {['250', '500', '1000'].map(a => (
+                      <button key={a} onClick={() => setFundsAmt(a)} className={`py-2 rounded-xl text-xs font-bold ${fundsAmt === a ? 'bg-[#006e2f] text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}>+₹{a}</button>
+                    ))}
+                  </div>
+                  <button onClick={handleTopUp} className="w-full h-12 bg-[#22c55e] hover:bg-[#006e2f] text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>Add to Wallet
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <Sidebar isOpen={showSidebar} onClose={() => setShowSidebar(false)} onNavigate={(scr) => { setScreen(scr); setShowSidebar(false); }} darkMode={darkMode} onToggleDark={() => setDarkMode(!darkMode)} lang={lang} onLangChange={setLang} />
+
+            {screen === 'login' && <LoginScreen onNavigate={setScreen} onLogin={handleLogin} />}
+            {screen === 'create_account' && <CreateAccountScreen onNavigate={setScreen} onSignup={handleSignup} />}
+            {screen === 'home' && profile && <HomeScreen profile={profile} setProfile={setProfile} sellers={sellers} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSelectSeller={id => { setSelSellerId(id); setScreen('marketplace'); }} onToggleSidebar={() => setShowSidebar(true)} />}
+            {screen === 'marketplace' && profile && <MarketScreen sellers={sellers} userBal={profile.balance || 0} initSellerId={selSellerId} onBuy={handleBuy} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
+            {screen === 'sell_surplus' && profile && <SellScreen surplus={profile.surplus || 0} onSell={handleSell} onNavigate={setScreen} />}
+            {screen === 'profile' && profile && <ProfileScreen profile={profile} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} onSignOut={handleSignOut} />}
+            {screen === 'transactions' && <TxScreen txns={txns} onNavigate={setScreen} />}
+            {screen === 'energy_dashboard' && profile && <EnergyDashboard profile={profile} onNavigate={setScreen} onToggleSidebar={() => setShowSidebar(true)} />}
+            {screen === 'personal_info' && profile && <PersonalInfoScreen profile={profile} onNavigate={setScreen} />}
+            {screen === 'smart_meter' && profile && <SmartMeterScreen profile={profile} onNavigate={setScreen} />}
+            {screen === 'payment_methods' && profile && <PaymentMethodsScreen userBal={profile.balance || 0} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
+            {screen === 'notifications' && <NotificationsScreen onNavigate={setScreen} />}
+            {screen === 'help' && <HelpSupportScreen onNavigate={setScreen} />}
+          </div>
+        </I18nContext.Provider>
       );
     }
+
 
     function LoginScreen({ onNavigate, onLogin }) {
       const [email, setEmail] = useState(''); const [pass, setPass] = useState(''); const [loading, setLoading] = useState(false); const [err, setErr] = useState('');
       const submit = async e => { e.preventDefault(); setLoading(true); setErr(''); const ok = await onLogin(email, pass); if (!ok) setErr('Invalid email or password.'); setLoading(false); };
       return (
-        <div className="flex-1 flex flex-col justify-center px-5 max-w-md mx-auto w-full min-h-screen py-10 animate-screen">
-          <header className="flex flex-col items-center mb-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#d3e4fe] flex items-center justify-center mb-4 energy-glow shadow-sm"><span className="material-symbols-outlined text-[#006e2f] text-[32px]">solar_power</span></div>
-            <h1 className="text-[36px] font-bold text-[#0b1c30] tracking-tight">SolarShare</h1>
-            <p className="text-[15px] text-[#565e74]">Share Sunlight. Share Savings.</p>
-          </header>
-          <div className="glass-panel rounded-3xl p-6 shadow-md border mb-6">
-            <h2 className="text-[24px] font-semibold text-[#0b1c30] mb-5">Welcome Back!</h2>
-            {err && <div className="mb-4 p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">{err}</div>}
-            <form onSubmit={submit} className="flex flex-col gap-4">
-              <div>
-                <label className="text-[12px] font-semibold uppercase tracking-wider text-slate-600 block mb-1">Email</label>
-                <div className="relative flex items-center bg-white rounded-xl border px-3 h-13 input-focus-ring">
-                  <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">person</span>
-                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-transparent focus:outline-none text-sm font-medium" placeholder="your@email.com" />
-                </div>
-              </div>
-              <div>
-                <label className="text-[12px] font-semibold uppercase tracking-wider text-slate-600 block mb-1">Password</label>
-                <div className="relative flex items-center bg-white rounded-xl border px-3 h-13 input-focus-ring">
-                  <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">lock</span>
-                  <input type="password" required value={pass} onChange={e => setPass(e.target.value)} className="w-full bg-transparent focus:outline-none text-sm font-medium" placeholder="••••••••" />
-                </div>
-              </div>
-              <button type="submit" disabled={loading} className="w-full h-13 bg-[#22c55e] hover:bg-[#006e2f] text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-60">
-                {loading && <span className="spin material-symbols-outlined text-[20px]">autorenew</span>}
-                <span>{loading ? 'Signing in...' : 'Login to Dashboard'}</span>
-                {!loading && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
-              </button>
-            </form>
+        <div className="flex-1 flex flex-col min-h-screen bg-[#f0f7f0] animate-screen">
+          {/* Hero Banner */}
+          <div className="relative w-full overflow-hidden" style={{height:'min(42vw,300px)',minHeight:'200px'}}>
+            <img src="./banner.jpg" alt="SolarShare" className="absolute inset-0 w-full h-full object-cover object-center" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/60"></div>
+            <div className="absolute top-3 right-3 bg-[#22c55e] text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block"></span>P2P Grid Live
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
+              <p className="text-white/80 text-[11px] font-bold tracking-widest uppercase mb-1">India's #1 P2P Energy Network</p>
+              <h1 className="text-white font-extrabold tracking-tight leading-tight drop-shadow-lg" style={{fontSize:'clamp(22px,5vw,34px)'}}>Share Sunlight.<br/>Share Savings.</h1>
+            </div>
           </div>
-          <div className="text-center pb-4 text-sm text-slate-600">Don't have an account?{' '}<button onClick={() => onNavigate('create_account')} className="text-[#006e2f] font-bold hover:underline">Create Account</button></div>
+          {/* Stats Strip */}
+          <div className="w-full bg-[#006e2f] text-white flex justify-around items-center py-2.5 px-4">
+            {[['1,200+','Prosumers'],['₹48L+','Traded'],['98%','Uptime']].map(([v,l])=>(
+              <div key={l} className="text-center">
+                <div className="text-[14px] font-extrabold leading-tight">{v}</div>
+                <div className="text-[10px] text-emerald-200 font-semibold">{l}</div>
+              </div>
+            ))}
+          </div>
+          {/* Login Card */}
+          <div className="flex-1 flex flex-col justify-center px-5 py-5 max-w-md mx-auto w-full">
+            <div className="glass-panel rounded-3xl p-6 shadow-xl border mb-4">
+              <div className="flex items-center gap-3 mb-5">
+                <img src="./logo.jpg" alt="SolarShare" className="w-11 h-11 object-contain rounded-xl energy-glow shadow-sm" />
+                <div>
+                  <h2 className="text-[20px] font-bold text-[#0b1c30] leading-tight">Welcome Back!</h2>
+                  <p className="text-[12px] text-slate-500">Login to your energy dashboard</p>
+                </div>
+              </div>
+              {err && <div className="mb-4 p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">error</span>{err}</div>}
+              <form onSubmit={submit} className="flex flex-col gap-3.5">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Email Address</label>
+                  <div className="relative flex items-center bg-white rounded-xl border px-3 h-12 input-focus-ring shadow-sm">
+                    <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">alternate_email</span>
+                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-transparent focus:outline-none text-sm font-medium" placeholder="your@email.com" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Password</label>
+                  <div className="relative flex items-center bg-white rounded-xl border px-3 h-12 input-focus-ring shadow-sm">
+                    <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">lock</span>
+                    <input type="password" required value={pass} onChange={e => setPass(e.target.value)} className="w-full bg-transparent focus:outline-none text-sm font-medium" placeholder="••••••••" />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full h-12 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-60"
+                  style={{background:'linear-gradient(135deg,#22c55e,#006e2f)'}}>
+                  {loading && <span className="spin material-symbols-outlined text-[20px]">autorenew</span>}
+                  <span>{loading ? 'Signing in...' : 'Login to Dashboard'}</span>
+                  {!loading && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
+                </button>
+              </form>
+            </div>
+            {/* Trust badges */}
+            <div className="flex gap-2 flex-wrap justify-center mb-4">
+              {[['bolt','Real-time Trading'],['shield','Blockchain Secured'],['eco','IEEE 2030.5']].map(([icon,label])=>(
+                <span key={label} className="flex items-center gap-1 bg-white border text-[11px] font-semibold text-slate-600 px-2.5 py-1 rounded-full shadow-sm">
+                  <span className="material-symbols-outlined text-[13px] text-emerald-600">{icon}</span>{label}
+                </span>
+              ))}
+            </div>
+            <div className="text-center text-sm text-slate-600">
+              Don't have an account?{' '}
+              <button onClick={() => onNavigate('create_account')} className="text-[#006e2f] font-bold hover:underline">Create Account →</button>
+            </div>
+          </div>
         </div>
       );
     }
+
 
     function CreateAccountScreen({ onNavigate, onSignup }) {
       const [f, setF] = useState({ fullName: '', email: '', password: '', unit: '', role: 'Prosumer', meterId: '', discom: 'BSES Rajdhani' });
@@ -368,7 +446,140 @@
       );
     }
 
-    function HomeScreen({ profile, setProfile, sellers, onNavigate, onAddFunds, onSelectSeller }) {
+    function Sidebar({ isOpen, onClose, onNavigate, darkMode, onToggleDark, lang, onLangChange }) {
+      const t = useTranslation();
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
+          <div className="relative w-72 max-w-[80%] bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col animate-fade-right transition-colors">
+            <div className="p-6 bg-gradient-to-br from-[#006e2f] to-[#22c55e] text-white">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-[32px]">solar_power</span>
+              </div>
+              <h2 className="text-xl font-bold">SolarShare</h2>
+              <p className="text-emerald-100 text-sm">P2P Microgrid</p>
+            </div>
+            <div className="flex-1 overflow-y-auto py-4">
+              <button onClick={() => onNavigate('home')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">home</span>
+                <span className="font-semibold text-sm">{t('home')}</span>
+              </button>
+              <button onClick={() => onNavigate('energy_dashboard')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">speed</span>
+                <span className="font-semibold text-sm">{t('dashboard')}</span>
+              </button>
+              <button onClick={() => onNavigate('marketplace')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">storefront</span>
+                <span className="font-semibold text-sm">{t('marketplace')}</span>
+              </button>
+              <button onClick={() => onNavigate('sell_surplus')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">add_circle</span>
+                <span className="font-semibold text-sm">{t('sell_surplus')}</span>
+              </button>
+              <button onClick={() => onNavigate('transactions')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">receipt_long</span>
+                <span className="font-semibold text-sm">{t('transactions')}</span>
+              </button>
+              <button onClick={() => onNavigate('profile')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">person</span>
+                <span className="font-semibold text-sm">{t('profile')}</span>
+              </button>
+            </div>
+            <div className="p-5 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center transition-colors">
+              <button onClick={onToggleDark} className="flex items-center gap-2 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors bg-slate-100 dark:bg-slate-800 px-3 py-2 rounded-xl">
+                <span className="material-symbols-outlined text-[18px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+                <span className="text-xs font-bold">{darkMode ? 'Light' : 'Dark'}</span>
+              </button>
+              <select value={lang} onChange={e => onLangChange(e.target.value)} className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold px-2 py-2 rounded-xl border-none outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="en">English</option>
+                <option value="hi">हिंदी</option>
+                <option value="mr">मराठी</option>
+              </select>
+            </div>
+
+          </div>
+        </div>
+      );
+    }
+
+    function EnergyDashboard({ profile, onNavigate }) {
+      const [liveData, setLiveData] = useState({
+        gen: 4.2, cons: 2.8, surp: 1.4, voltage: 230, freq: 50.1, activeTrades: 12
+      });
+
+      useEffect(() => {
+        const i = setInterval(() => {
+          setLiveData(p => {
+            const gen = Math.max(0, p.gen + (Math.random() * 0.4 - 0.2));
+            const cons = Math.max(0, p.cons + (Math.random() * 0.3 - 0.15));
+            return {
+              gen, cons, surp: Math.max(0, gen - cons),
+              voltage: 230 + (Math.random() * 4 - 2),
+              freq: 50 + (Math.random() * 0.2 - 0.1),
+              activeTrades: Math.floor(10 + Math.random() * 10)
+            };
+          });
+        }, 2000);
+        return () => clearInterval(i);
+      }, []);
+
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] text-slate-900 dark:text-white transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between transition-colors">
+            <div className="flex items-center gap-3">
+              <button onClick={() => onNavigate('home')} className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-white hover:bg-slate-200 transition-colors"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button>
+              <h1 className="text-[18px] font-bold text-[#006e2f] dark:text-white">Real-Time Grid</h1>
+            </div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span><span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Live</span></div>
+          </header>
+
+          <main className="px-5 pt-5 max-w-2xl mx-auto w-full space-y-4">
+            <div className="glass-panel !bg-white dark:!bg-slate-800/50 !border-slate-200 dark:!border-slate-700 rounded-3xl p-6 text-center shadow-md relative overflow-hidden transition-colors">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#22c55e]/20 dark:from-[#22c55e]/10 to-transparent"></div>
+              <div className="relative z-10">
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">Net Surplus Energy</span>
+                <div className="text-[52px] font-black text-[#006e2f] dark:text-[#22c55e] leading-none my-2 drop-shadow-[0_0_15px_rgba(34,197,94,0.2)] dark:drop-shadow-[0_0_15px_rgba(34,197,94,0.4)]">{liveData.surp.toFixed(2)}<span className="text-xl font-medium text-slate-400 dark:text-slate-500 ml-1">kW</span></div>
+                <div className="inline-flex items-center justify-center gap-2 mt-2 bg-emerald-50 dark:bg-slate-900/80 px-3 py-1.5 rounded-full border border-emerald-100 dark:border-slate-700">
+                  <span className="material-symbols-outlined text-[#006e2f] dark:text-[#22c55e] text-[16px]">sync_alt</span>
+                  <span className="text-[11px] font-bold text-[#006e2f] dark:text-slate-300">{liveData.activeTrades} Active P2P Trades</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-28 transition-colors">
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400"><span className="material-symbols-outlined text-[20px] text-amber-500 dark:text-amber-400">solar_power</span><span className="text-[11px] font-bold uppercase">Generation</span></div>
+                <div className="text-[28px] font-black text-slate-800 dark:text-white">{liveData.gen.toFixed(2)}<span className="text-sm font-normal text-slate-400 dark:text-slate-500 ml-1">kW</span></div>
+              </div>
+              <div className="bg-white dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between h-28 transition-colors">
+                <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400"><span className="material-symbols-outlined text-[20px] text-blue-500 dark:text-blue-400">electric_bolt</span><span className="text-[11px] font-bold uppercase">Consumption</span></div>
+                <div className="text-[28px] font-black text-slate-800 dark:text-white">{liveData.cons.toFixed(2)}<span className="text-sm font-normal text-slate-400 dark:text-slate-500 ml-1">kW</span></div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 space-y-3 transition-colors shadow-sm">
+              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Grid Telemetry</h3>
+              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2"><span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[18px]">speed</span><span className="text-sm font-medium text-slate-700 dark:text-slate-300">Voltage</span></div>
+                <span className="text-sm font-bold text-[#006e2f] dark:text-emerald-400 font-mono">{liveData.voltage.toFixed(1)} V</span>
+              </div>
+              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2"><span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[18px]">waves</span><span className="text-sm font-medium text-slate-700 dark:text-slate-300">Frequency</span></div>
+                <span className="text-sm font-bold text-[#006e2f] dark:text-emerald-400 font-mono">{liveData.freq.toFixed(2)} Hz</span>
+              </div>
+            </div>
+            
+            <button onClick={() => onNavigate('sell_surplus')} className="w-full h-14 mt-4 bg-[#006e2f] dark:bg-[#22c55e] hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white rounded-2xl font-bold shadow-[0_0_20px_rgba(0,110,47,0.2)] dark:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined">add_circle</span> Auto-Trade Surplus
+            </button>
+          </main>
+        </div>
+      );
+    }
+
+    function HomeScreen({ profile, setProfile, sellers, onNavigate, onAddFunds, onSelectSeller, onToggleSidebar }) {
+      const t = useTranslation();
       const simulateGen = async () => {
         const newSurplus = (profile.surplus || 0) + 1.5;
         if (setProfile) setProfile(p => ({ ...p, surplus: newSurplus }));
@@ -381,9 +592,13 @@
 
       return (
         <div className="flex-1 flex flex-col pb-24 animate-screen">
-          <header className="sticky top-0 z-40 bg-[#f8f9ff]/90 backdrop-blur-md px-5 h-16 border-b flex items-center justify-between">
-            <div className="flex items-center gap-2"><span className="material-symbols-outlined text-[#006e2f] text-[28px]">solar_power</span><h1 className="text-[20px] font-bold text-[#006e2f]">SolarShare</h1></div>
-            <button onClick={onAddFunds} className="bg-emerald-50 text-[#006e2f] border border-emerald-200 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold">
+          <header className="sticky top-0 z-40 bg-[#f8f9ff]/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b dark:border-slate-800 flex items-center justify-between transition-colors">
+            <div className="flex items-center gap-2">
+              <button onClick={onToggleSidebar} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center active:bg-slate-200 dark:active:bg-slate-800 transition-colors">
+                <span className="material-symbols-outlined text-[24px] text-slate-700 dark:text-white">menu</span>
+              </button>
+              <img src="./logo.jpg" alt="SolarShare" className="w-9 h-9 object-contain rounded-lg" /><h1 className="text-[20px] font-bold text-[#006e2f] dark:text-emerald-400">SolarShare</h1></div>
+            <button onClick={onAddFunds} className="bg-emerald-50 dark:bg-slate-800 text-[#006e2f] dark:text-emerald-400 border border-emerald-200 dark:border-slate-700 px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-bold transition-colors">
               <span className="material-symbols-outlined text-[16px]">account_balance_wallet</span>
               <span>₹{(profile.balance || 0).toFixed(2)}</span>
             </button>
@@ -391,43 +606,43 @@
           <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-5 animate-fade-up">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-[24px] font-bold text-[#0b1c30]">Welcome, {(profile.name || 'User').split(' ')[0]} 👋</h2>
-                <p className="text-xs text-[#565e74] flex items-center gap-1 mt-0.5"><span className="material-symbols-outlined text-[14px] text-emerald-600">location_on</span><span>{profile.flat_no} • {profile.discom}</span></p>
+                <h2 className="text-[24px] font-bold text-[#0b1c30] dark:text-white">{t('welcome')}, {(profile.name || 'User').split(' ')[0]} 👋</h2>
+                <p className="text-xs text-[#565e74] dark:text-slate-400 flex items-center gap-1 mt-0.5"><span className="material-symbols-outlined text-[14px] text-emerald-600 dark:text-emerald-400">location_on</span><span>{profile.flat_no} • {profile.discom}</span></p>
               </div>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-bold uppercase">{profile.role}</span>
+              <span className="text-[10px] bg-emerald-100 dark:bg-slate-800 text-emerald-800 dark:text-emerald-400 border dark:border-slate-700 px-2 py-1 rounded-full font-bold uppercase transition-colors">{profile.role}</span>
             </div>
-            <div className="glass-panel rounded-3xl p-5 border shadow-sm energy-glow bg-gradient-to-br from-white to-emerald-50/40 animate-fade-up">
+            <div className="glass-panel rounded-3xl p-5 border dark:border-slate-700 shadow-sm energy-glow bg-gradient-to-br from-white dark:from-slate-800/80 to-emerald-50/40 dark:to-slate-800/40 animate-fade-up transition-colors">
               <div className="flex justify-between items-start mb-3">
-                <div><h3 className="font-bold text-slate-500 text-xs uppercase tracking-wider">Live Smart Meter</h3><div className="text-[40px] font-black text-[#006e2f] leading-none mt-1">{(profile.surplus || 0).toFixed(1)} <span className="text-base font-normal text-slate-500">kWh</span></div></div>
-                <button onClick={simulateGen} className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center border text-[#22c55e] hover:bg-emerald-50 smart-meter-glow transition-all" title="Simulate Solar Generation">
+                <div><h3 className="font-bold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">{t('live_meter')}</h3><div className="text-[40px] font-black text-[#006e2f] dark:text-white leading-none mt-1">{(profile.surplus || 0).toFixed(1)} <span className="text-base font-normal text-slate-500 dark:text-slate-400">kWh</span></div></div>
+                <button onClick={simulateGen} className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center border dark:border-slate-600 text-[#22c55e] hover:bg-emerald-50 dark:hover:bg-slate-700 smart-meter-glow transition-all" title="Simulate Solar Generation">
                   <span className="material-symbols-outlined text-[24px]">solar_power</span>
                 </button>
               </div>
-              <div className="flex justify-between items-center pt-3 border-t border-slate-200/80 text-xs text-slate-600">
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200/80 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400">
                 <span>Meter ID: <b className="font-mono">{profile.meter_id || 'N/A'}</b></span>
-                <span className="text-emerald-700 font-semibold flex items-center gap-0.5"><span className="material-symbols-outlined text-[14px]">bolt</span> P2P Ready</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-0.5"><span className="material-symbols-outlined text-[14px]">bolt</span> P2P Ready</span>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div onClick={simulateGen} className="bg-white rounded-2xl p-4 border shadow-sm cursor-pointer hover:bg-emerald-50 transition-colors" title="Click to Simulate Generation">
-                <div className="flex items-center gap-1.5 mb-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span className="text-xs font-bold text-slate-700">Live Smart Meter</span></div>
-                <div className="text-[22px] font-black text-[#006e2f]">{(profile.surplus || 0).toFixed(1)} <span className="text-xs font-normal text-slate-500">kWh</span></div>
-                <span className="text-[11px] text-slate-500 block text-[#006e2f] font-semibold">Tap to Generate +1.5</span>
+              <div onClick={simulateGen} className="bg-white dark:bg-slate-800/80 rounded-2xl p-4 border dark:border-slate-700 shadow-sm cursor-pointer hover:bg-emerald-50 dark:hover:bg-slate-700 transition-colors" title="Click to Simulate Generation">
+                <div className="flex items-center gap-1.5 mb-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span><span className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('live_meter')}</span></div>
+                <div className="text-[22px] font-black text-[#006e2f] dark:text-white">{(profile.surplus || 0).toFixed(1)} <span className="text-xs font-normal text-slate-500 dark:text-slate-400">kWh</span></div>
+                <span className="text-[11px] block text-[#006e2f] dark:text-emerald-400 font-semibold">Tap to Generate +1.5</span>
               </div>
-              <div className="bg-white rounded-2xl p-4 border shadow-sm">
-                <span className="text-xs font-bold text-slate-700 block mb-1">Live Market</span>
-                <div className="text-[22px] font-black text-emerald-600">{sellers.length}</div>
-                <span className="text-[11px] text-slate-500 block">Active Listings</span>
-                <div className="mt-2 text-[11px] text-emerald-700 font-semibold flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">eco</span><span>P2P Grid Online</span></div>
+              <div className="bg-white dark:bg-slate-800/80 rounded-2xl p-4 border dark:border-slate-700 shadow-sm transition-colors">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">{t('live_market')}</span>
+                <div className="text-[22px] font-black text-emerald-600 dark:text-emerald-400">{sellers.length}</div>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 block">{t('activeListings') || 'Active Listings'}</span>
+                <div className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">eco</span><span>P2P Grid Online</span></div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => onNavigate('marketplace')} className="p-4 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100/70 rounded-2xl flex items-center gap-3 text-left transition-all">
-                <div className="w-10 h-10 rounded-full bg-[#006e2f] text-white flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[20px]">shopping_cart</span></div>
-                <div><h4 className="font-bold text-sm text-[#0b1c30]">Buy Energy</h4><p className="text-[11px] text-slate-500">{sellers.length} sellers live</p></div>
+              <button onClick={() => onNavigate('marketplace')} className="p-4 bg-emerald-50 dark:bg-slate-800/80 border border-emerald-200 dark:border-slate-700 hover:bg-emerald-100/70 dark:hover:bg-slate-700 rounded-2xl flex items-center gap-3 text-left transition-all">
+                <div className="w-10 h-10 rounded-full bg-[#006e2f] dark:bg-[#22c55e] text-white flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[20px]">shopping_cart</span></div>
+                <div><h4 className="font-bold text-sm text-[#0b1c30] dark:text-white">{t('buy_energy')}</h4><p className="text-[11px] text-slate-500 dark:text-slate-400">{sellers.length} sellers live</p></div>
               </button>
-              <button onClick={() => onNavigate('sell_surplus')} className="p-4 bg-white border hover:bg-slate-50 rounded-2xl flex items-center gap-3 text-left transition-all shadow-sm">
-                <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[20px]">storefront</span></div>
+              <button onClick={() => onNavigate('sell_surplus')} className="p-4 bg-white dark:bg-slate-800/80 border dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl flex items-center gap-3 text-left transition-all shadow-sm">
+                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-slate-700 text-emerald-800 dark:text-emerald-400 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[20px]">storefront</span></div>
                 <div><h4 className="font-bold text-sm text-[#0b1c30]">Sell Surplus</h4><p className="text-[11px] text-slate-500">{(profile.surplus || 0).toFixed(1)} kWh left</p></div>
               </button>
             </div>
@@ -565,11 +780,11 @@
     function ProfileScreen({ profile, onNavigate, onAddFunds, onSignOut }) {
       const av = `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name || 'User')}&background=22c55e&color=fff&bold=true&size=128`;
       const menu = [
-        { icon: 'person', label: 'Personal Info' },
-        { icon: 'speed', label: 'Smart Meter' },
-        { icon: 'credit_card', label: 'Payment Methods' },
-        { icon: 'notifications', label: 'Notifications' },
-        { icon: 'help', label: 'Help & Support' }
+        { id: 'personal_info', icon: 'person', label: 'Personal Info' },
+        { id: 'smart_meter', icon: 'speed', label: 'Smart Meter' },
+        { id: 'payment_methods', icon: 'credit_card', label: 'Payment Methods' },
+        { id: 'notifications', icon: 'notifications', label: 'Notifications' },
+        { id: 'help', icon: 'help', label: 'Help & Support' }
       ];
       return (
         <div className="flex-1 flex flex-col pb-24 animate-screen">
@@ -580,7 +795,7 @@
             
             <div className="space-y-3">
               {menu.map((m, i) => (
-                <button key={i} onClick={() => toast(m.label + ' coming soon!')} className="w-full bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between active:scale-95 transition-transform hover:bg-slate-50">
+                <button key={i} onClick={() => onNavigate(m.id)} className="w-full bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between active:scale-95 transition-transform hover:bg-slate-50">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
                       <span className="material-symbols-outlined text-[20px]">{m.icon}</span>
@@ -638,21 +853,151 @@
       );
     }
 
+    // PROFILE SUB-SCREENS
+    function PersonalInfoScreen({ profile, onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('profile')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"><span className="material-symbols-outlined text-[24px]">arrow_back</span></button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white">Personal Info</h1>
+          </header>
+          <main className="px-5 pt-6 max-w-2xl mx-auto w-full space-y-4">
+            <div className="bg-white dark:bg-slate-800/80 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4 transition-colors">
+              <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Full Name</label><div className="font-bold text-slate-800 dark:text-white text-base">{profile.name}</div></div>
+              <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Email Address</label><div className="font-bold text-slate-800 dark:text-white text-base">{profile.email}</div></div>
+              <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Flat / Villa No.</label><div className="font-bold text-slate-800 dark:text-white text-base">{profile.flat_no}</div></div>
+              <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">DISCOM</label><div className="font-bold text-slate-800 dark:text-white text-base">{profile.discom}</div></div>
+              <div><label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Role</label><div className="font-bold text-[#006e2f] dark:text-emerald-400 uppercase text-sm bg-emerald-50 dark:bg-slate-900/80 px-2 py-1 rounded inline-block">{profile.role}</div></div>
+            </div>
+            <button className="w-full bg-[#006e2f] dark:bg-[#22c55e] hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white font-bold h-12 rounded-xl mt-4 transition-colors">Edit Details</button>
+          </main>
+        </div>
+      );
+    }
+
+    function SmartMeterScreen({ profile, onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('profile')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"><span className="material-symbols-outlined text-[24px]">arrow_back</span></button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white">Smart Meter</h1>
+          </header>
+          <main className="px-5 pt-6 max-w-2xl mx-auto w-full space-y-5">
+            <div className="glass-panel !bg-white dark:!bg-slate-800/50 p-6 rounded-3xl text-center border border-slate-200 dark:border-slate-700 shadow-sm energy-glow transition-colors">
+              <span className="material-symbols-outlined text-[48px] text-[#22c55e] mb-2 spin-slow">settings_input_component</span>
+              <h2 className="text-[24px] font-black text-slate-800 dark:text-white mb-1">Meter ID: {profile.meter_id || 'SM-884920'}</h2>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-slate-900/80 px-3 py-1 rounded-full inline-block mt-2">● Online & Syncing</span>
+            </div>
+            <div className="bg-white dark:bg-slate-800/80 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm grid grid-cols-2 gap-4 transition-colors">
+              <div className="text-center"><span className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Firmware</span><span className="font-bold text-slate-800 dark:text-white">v2.4.1</span></div>
+              <div className="text-center"><span className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Last Sync</span><span className="font-bold text-slate-800 dark:text-white">Just now</span></div>
+              <div className="text-center"><span className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Grid Freq</span><span className="font-bold text-slate-800 dark:text-white">50.0 Hz</span></div>
+              <div className="text-center"><span className="text-xs font-bold text-slate-500 dark:text-slate-400 block mb-1">Voltage</span><span className="font-bold text-slate-800 dark:text-white">230V</span></div>
+            </div>
+            <button className="w-full border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold h-12 rounded-xl mt-4 flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"><span className="material-symbols-outlined text-[20px]">sync</span> Run Diagnostics</button>
+          </main>
+        </div>
+      );
+    }
+
+    function PaymentMethodsScreen({ userBal, onNavigate, onAddFunds }) {
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('profile')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"><span className="material-symbols-outlined text-[24px]">arrow_back</span></button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white">Payment Methods</h1>
+          </header>
+          <main className="px-5 pt-6 max-w-2xl mx-auto w-full space-y-4">
+            <div className="bg-gradient-to-br from-[#0b1c30] to-[#1e3a8a] text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+              <span className="text-xs font-medium text-blue-200 uppercase tracking-wider block mb-1">SolarShare Wallet</span>
+              <div className="text-[36px] font-black leading-none mb-4">₹{(userBal || 0).toFixed(2)}</div>
+              <button onClick={onAddFunds} className="bg-white text-[#0b1c30] px-5 py-2.5 rounded-full font-bold text-sm shadow-md hover:bg-slate-100 transition-colors">Top Up Balance</button>
+              <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[120px] text-white opacity-10">account_balance_wallet</span>
+            </div>
+            <h3 className="font-bold text-slate-700 dark:text-slate-300 text-sm pt-4">Linked Accounts</h3>
+            <div className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between transition-colors">
+              <div className="flex items-center gap-3"><div className="w-10 h-10 bg-blue-50 dark:bg-slate-900/50 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center"><span className="material-symbols-outlined">account_balance</span></div><div><h4 className="font-bold text-slate-800 dark:text-white text-sm">HDFC Bank</h4><p className="text-xs text-slate-500 dark:text-slate-400">**** 4567</p></div></div>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-slate-900/80 px-2 py-1 rounded uppercase">Primary</span>
+            </div>
+            <div className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between transition-colors">
+              <div className="flex items-center gap-3"><div className="w-10 h-10 bg-indigo-50 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400 rounded-lg flex items-center justify-center"><span className="material-symbols-outlined">qr_code_scanner</span></div><div><h4 className="font-bold text-slate-800 dark:text-white text-sm">UPI ID</h4><p className="text-xs text-slate-500 dark:text-slate-400">user@okhdfcbank</p></div></div>
+            </div>
+            <button className="w-full h-14 border-2 border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors mt-2"><span className="material-symbols-outlined">add</span> Add Payment Method</button>
+          </main>
+        </div>
+      );
+    }
+
+    function NotificationsScreen({ onNavigate }) {
+      const notifs = [
+        { id: 1, title: 'Energy Sold', msg: 'You successfully sold 5.0 kWh to Amit.', time: '10 mins ago', icon: 'check_circle', color: 'text-emerald-500 dark:text-emerald-400' },
+        { id: 2, title: 'Grid Rate Peak', msg: 'Grid buy-back rates are at a daily high (₹8.0/u).', time: '1 hour ago', icon: 'trending_up', color: 'text-amber-500 dark:text-amber-400' },
+        { id: 3, title: 'Smart Meter Sync', msg: 'Your Smart Meter completed its daily diagnostic.', time: 'Yesterday', icon: 'sync', color: 'text-blue-500 dark:text-blue-400' }
+      ];
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('profile')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"><span className="material-symbols-outlined text-[24px]">arrow_back</span></button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white">Notifications</h1>
+          </header>
+          <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-3">
+            {notifs.map(n => (
+              <div key={n.id} className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-start gap-3 transition-colors">
+                <div className={`mt-0.5 ${n.color}`}><span className="material-symbols-outlined text-[24px]">{n.icon}</span></div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-slate-800 dark:text-white text-sm">{n.title}</h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">{n.msg}</p>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 block mt-1.5">{n.time}</span>
+                </div>
+              </div>
+            ))}
+          </main>
+        </div>
+      );
+    }
+
+    function HelpSupportScreen({ onNavigate }) {
+      return (
+        <div className="flex-1 flex flex-col pb-24 animate-screen bg-[#f8f9ff] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('profile')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"><span className="material-symbols-outlined text-[24px]">arrow_back</span></button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white">Help & Support</h1>
+          </header>
+          <main className="px-5 pt-6 max-w-2xl mx-auto w-full space-y-4">
+            <div className="bg-[#006e2f] dark:bg-[#22c55e] text-white p-6 rounded-3xl shadow-sm text-center transition-colors">
+              <span className="material-symbols-outlined text-[48px] mb-2 opacity-90">support_agent</span>
+              <h2 className="text-[22px] font-bold">How can we help?</h2>
+              <p className="text-sm text-emerald-100 dark:text-emerald-50 mt-1">Our team is available 24/7 for support.</p>
+            </div>
+            <div className="space-y-2">
+              {['FAQs', 'Contact Us', 'Report an Issue', 'Terms of Service', 'Privacy Policy'].map(item => (
+                <button key={item} className="w-full bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <span className="font-bold text-sm">{item}</span>
+                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-500">chevron_right</span>
+                </button>
+              ))}
+            </div>
+          </main>
+        </div>
+      );
+    }
+
     // BOTTOM NAV
     function BottomNav({ current, onNavigate }) {
-      const items = [{ id: 'home', icon: 'home', label: 'Home' }, { id: 'marketplace', icon: 'storefront', label: 'Market' }, { id: 'sell_surplus', icon: 'add_circle', label: 'Sell', isFab: true }, { id: 'transactions', icon: 'receipt_long', label: 'History' }, { id: 'profile', icon: 'person', label: 'Profile' }];
+      const t = useTranslation();
+      const items = [{ id: 'home', icon: 'home', label: t('home') }, { id: 'marketplace', icon: 'storefront', label: t('marketplace') }, { id: 'sell_surplus', icon: 'add_circle', label: t('sell_surplus') || 'Sell', isFab: true }, { id: 'transactions', icon: 'receipt_long', label: t('transactions') || 'History' }, { id: 'profile', icon: 'person', label: t('profile') }];
       return (
-        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-t flex justify-around items-center z-40 px-2 shadow-lg">
+        <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#0b1c30]/95 backdrop-blur-md border-t dark:border-slate-800 flex justify-around items-center z-40 px-2 shadow-lg transition-colors">
           {items.map(item => {
             const a = current === item.id; return item.isFab ? (
               <button key={item.id} onClick={() => onNavigate(item.id)} className="flex flex-col items-center justify-center -mt-6 active:scale-95 transition-transform cursor-pointer">
-                <div className="w-13 h-13 bg-[#22c55e] text-white rounded-full flex items-center justify-center shadow-lg border-4 border-white"><span className="material-symbols-outlined text-[26px]">add</span></div>
-                <span className="text-[11px] font-bold text-[#006e2f] mt-0.5">Sell</span>
+                <div className="w-13 h-13 bg-[#22c55e] text-white rounded-full flex items-center justify-center shadow-lg border-4 border-white dark:border-slate-800"><span className="material-symbols-outlined text-[26px]">add</span></div>
+                <span className="text-[11px] font-bold text-[#006e2f] dark:text-emerald-400 mt-0.5">{item.label}</span>
               </button>
             ) : (
-              <button key={item.id} onClick={() => onNavigate(item.id)} className={`flex flex-col items-center justify-center w-14 h-full cursor-pointer transition-all ${a ? 'text-[#006e2f] font-bold' : 'text-slate-400 hover:text-slate-600'}`}>
+              <button key={item.id} onClick={() => onNavigate(item.id)} className={`flex flex-col items-center justify-center w-14 h-full cursor-pointer transition-all ${a ? 'text-[#006e2f] dark:text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}>
                 <span className="material-symbols-outlined text-[22px]">{item.icon}</span>
-                <span className="text-[11px] mt-0.5">{item.label}</span>
+                <span className="text-[11px] mt-0.5 max-w-full overflow-hidden text-ellipsis whitespace-nowrap px-1">{item.label}</span>
               </button>
             );
           })}
