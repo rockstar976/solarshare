@@ -356,6 +356,7 @@
             {screen === 'payment_methods' && profile && <PaymentMethodsScreen userBal={profile.balance || 0} onNavigate={setScreen} onAddFunds={() => setShowFunds(true)} />}
             {screen === 'notifications' && <NotificationsScreen onNavigate={setScreen} />}
             {screen === 'help' && <HelpSupportScreen onNavigate={setScreen} />}
+            {screen === 'analytics' && <AnalyticsScreen txns={txns} profile={profile} onNavigate={setScreen} />}
           </div>
         </I18nContext.Provider>
       );
@@ -514,6 +515,10 @@
               <button onClick={() => onNavigate('transactions')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
                 <span className="material-symbols-outlined text-[22px]">receipt_long</span>
                 <span className="font-semibold text-sm">{t('transactions')}</span>
+              </button>
+              <button onClick={() => onNavigate('analytics')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
+                <span className="material-symbols-outlined text-[22px]">bar_chart</span>
+                <span className="font-semibold text-sm">Analytics</span>
               </button>
               <button onClick={() => onNavigate('profile')} className="w-full flex items-center gap-4 px-6 py-3 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-slate-800 hover:text-[#006e2f] transition-colors">
                 <span className="material-symbols-outlined text-[22px]">person</span>
@@ -1011,6 +1016,182 @@
                 </button>
               ))}
             </div>
+          </main>
+        </div>
+      );
+    }
+
+    // ANALYTICS
+    function AnalyticsScreen({ txns, profile, onNavigate }) {
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const now = new Date();
+      const hasData = txns && txns.length > 0;
+
+      // Demo fallback values for 6 months
+      const demoValues = [
+        { sold: 1240, bought: 380, profit: 860, kwhSold: 62, kwhBought: 19, count: 8 },
+        { sold: 1875, bought: 520, profit: 1355, kwhSold: 93, kwhBought: 26, count: 14 },
+        { sold: 2100, bought: 430, profit: 1670, kwhSold: 105, kwhBought: 21.5, count: 18 },
+        { sold: 1560, bought: 610, profit: 950, kwhSold: 78, kwhBought: 30.5, count: 12 },
+        { sold: 2340, bought: 490, profit: 1850, kwhSold: 117, kwhBought: 24.5, count: 21 },
+        { sold: 1980, bought: 350, profit: 1630, kwhSold: 99, kwhBought: 17.5, count: 16 },
+      ];
+
+      // Build monthly data for last 6 months
+      const displayData = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        const label = months[d.getMonth()];
+        const fullLabel = months[d.getMonth()] + ' ' + d.getFullYear();
+        
+        if (!hasData) {
+          return { label, fullLabel, ...demoValues[i] };
+        }
+
+        const mTxns = txns.filter(tx => {
+          const td = new Date(tx.created_at || tx.date || Date.now());
+          return td.getMonth() === d.getMonth() && td.getFullYear() === d.getFullYear();
+        });
+        const sold = mTxns.filter(t => t.type === 'sold').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const bought = mTxns.filter(t => t.type === 'bought').reduce((a, t) => a + (Number(t.amount) || 0), 0);
+        const kwhSold = mTxns.filter(t => t.type === 'sold').reduce((a, t) => a + (Number(t.kwh) || 0), 0);
+        const kwhBought = mTxns.filter(t => t.type === 'bought').reduce((a, t) => a + (Number(t.kwh) || 0), 0);
+        return { label, fullLabel, sold, bought, profit: sold - bought, kwhSold, kwhBought, count: mTxns.length };
+      });
+
+      const totalSold = displayData.reduce((a, m) => a + m.sold, 0);
+      const totalBought = displayData.reduce((a, m) => a + m.bought, 0);
+      const totalProfit = displayData.reduce((a, m) => a + m.profit, 0);
+      const totalKwhSold = displayData.reduce((a, m) => a + m.kwhSold, 0);
+      const maxVal = Math.max(...displayData.map(m => m.sold), ...displayData.map(m => m.bought), 1);
+      const maxProfit = Math.max(...displayData.map(m => Math.abs(m.profit)), 1);
+
+      return (
+        <div className="flex-1 flex flex-col min-h-screen bg-[#f0f7f0] dark:bg-[#0b1c30] transition-colors">
+          <header className="sticky top-0 z-40 bg-white/90 dark:bg-[#0b1c30]/90 backdrop-blur-md px-5 h-16 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 transition-colors">
+            <button onClick={() => onNavigate('home')} className="w-9 h-9 -ml-2 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors">
+              <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+            </button>
+            <h1 className="text-[20px] font-bold text-[#006e2f] dark:text-white flex-1">Analytics</h1>
+            {!hasData && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-bold">Demo Data</span>}
+          </header>
+
+          <main className="px-4 pt-5 pb-28 max-w-2xl mx-auto w-full space-y-5">
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white dark:bg-slate-800/80 rounded-3xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm transition-colors">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-emerald-600 text-[20px]">trending_up</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Total Earned</span>
+                </div>
+                <div className="text-2xl font-black text-[#006e2f] dark:text-emerald-400">₹{totalSold.toLocaleString('en-IN')}</div>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{totalKwhSold.toFixed(1)} kWh sold</div>
+              </div>
+              <div className="bg-white dark:bg-slate-800/80 rounded-3xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm transition-colors">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="material-symbols-outlined text-red-500 text-[20px]">trending_down</span>
+                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase">Total Spent</span>
+                </div>
+                <div className="text-2xl font-black text-red-600 dark:text-red-400">₹{totalBought.toLocaleString('en-IN')}</div>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">energy purchased</div>
+              </div>
+              <div className="col-span-2 bg-gradient-to-br from-[#006e2f] to-[#22c55e] rounded-3xl p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-emerald-200 text-[20px]">account_balance</span>
+                      <span className="text-[11px] font-bold text-emerald-100 uppercase">Net Profit (6 months)</span>
+                    </div>
+                    <div className="text-3xl font-black text-white">₹{totalProfit.toLocaleString('en-IN')}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-emerald-200 text-[11px] font-bold">Avg/month</div>
+                    <div className="text-xl font-black text-white">₹{Math.round(totalProfit / 6).toLocaleString('en-IN')}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Monthly Bar Chart - Sales vs Purchase */}
+            <div className="bg-white dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-colors">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Monthly Sales vs Purchase</h3>
+                <div className="flex gap-3 text-[11px] font-bold">
+                  <span className="flex items-center gap-1"><span style={{background:'#22c55e'}} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Sold</span></span>
+                  <span className="flex items-center gap-1"><span style={{background:'#f87171'}} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Bought</span></span>
+                </div>
+              </div>
+              <div className="flex items-end justify-between gap-1" style={{height:'140px'}}>
+                {displayData.map((m, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div className="w-full flex gap-0.5 items-end" style={{height:'120px'}}>
+                      <div className="flex-1 rounded-t-lg transition-all" style={{background:'#22c55e', height: m.sold > 0 ? Math.max(4, (m.sold / maxVal) * 116) + 'px' : '0px'}}></div>
+                      <div className="flex-1 rounded-t-lg transition-all" style={{background:'#f87171', height: m.bought > 0 ? Math.max(4, (m.bought / maxVal) * 116) + 'px' : '0px'}}></div>
+                    </div>
+                    <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold text-center leading-tight">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Profit Bar Chart */}
+            <div className="bg-white dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-colors">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm mb-4">Monthly Net Profit</h3>
+              <div className="flex items-end justify-between gap-1" style={{height:'120px'}}>
+                {displayData.map((m, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div className="w-full flex flex-col items-center justify-end" style={{height:'100px'}}>
+                      <div className="text-[9px] font-bold mb-0.5" style={{color: m.profit >= 0 ? '#006e2f' : '#ef4444'}}>
+                        {m.profit !== 0 ? `₹${Math.round(m.profit / 1000 * 10) / 10}k` : '₹0'}
+                      </div>
+                      <div className="w-full rounded-t-lg transition-all" style={{background: m.profit >= 0 ? '#006e2f' : '#ef4444', height: m.profit !== 0 ? Math.max(4, (Math.abs(m.profit) / maxProfit) * 80) + 'px' : '0px'}}></div>
+                    </div>
+                    <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold text-center leading-tight">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Monthly breakdown table */}
+            <div className="bg-white dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden transition-colors">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700">
+                <h3 className="font-bold text-slate-800 dark:text-white text-sm">Month-wise Breakdown</h3>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                {[...displayData].reverse().map((m, i) => (
+                  <div key={i} className="px-5 py-3.5 flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-sm text-slate-800 dark:text-white">{m.fullLabel}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">{m.count} txns • {m.kwhSold.toFixed(1)} kWh sold</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-black text-sm" style={{color: m.profit >= 0 ? '#006e2f' : '#ef4444'}}>₹{m.profit.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <div className="text-[10px] text-slate-400 dark:text-slate-500">profit</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Energy stats */}
+            <div className="bg-white dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-colors">
+              <h3 className="font-bold text-slate-800 dark:text-white text-sm mb-3">Energy Summary</h3>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-3">
+                  <div className="text-lg font-black text-[#006e2f] dark:text-emerald-400">{totalKwhSold.toFixed(0)}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">kWh Sold</div>
+                </div>
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3">
+                  <div className="text-lg font-black text-red-600 dark:text-red-400">{displayData.reduce((a,m)=>a+m.kwhBought,0).toFixed(0)}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">kWh Bought</div>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3">
+                  <div className="text-lg font-black text-blue-600 dark:text-blue-400">{displayData.reduce((a,m)=>a+m.count,0)}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Total Txns</div>
+                </div>
+              </div>
+            </div>
+
           </main>
         </div>
       );
