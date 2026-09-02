@@ -68,22 +68,49 @@
     }
 
     @keyframes slideInRight {
-      from { opacity: 0; transform: translateX(20px); }
-      to { opacity: 1; transform: translateX(0); }
+      from {
+        opacity: 0;
+        transform: translateX(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
     }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(15px); }
-      to { opacity: 1; transform: translateY(0); }
+      from {
+        opacity: 0;
+        transform: translateY(15px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
-    .animate-screen { animation: fadeUp 0.4s ease-out forwards; }
-    
-    @keyframes pulse-glow {
-      0%, 100% { box-shadow: 0 0 15px rgba(34,197,94,0.2); }
-      50% { box-shadow: 0 0 30px rgba(34,197,94,0.6); }
+    .animate-screen {
+      animation: fadeUp 0.4s ease-out forwards;
     }
-    .smart-meter-glow { animation: pulse-glow 2s infinite; border: 2px solid #22c55e; }
+
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 0 15px rgba(34, 197, 94, 0.2);
+      }
+
+      50% {
+        box-shadow: 0 0 30px rgba(34, 197, 94, 0.6);
+      }
+    }
+
+    .smart-meter-glow {
+      animation: pulse-glow 2s infinite;
+      border: 2px solid #22c55e;
+    }
 
     @keyframes spin {
       to {
@@ -97,8 +124,15 @@
     }
 
     /* Dark mode body base */
-    html.dark body { background-color: #0b1c30; color: #f8fafc; }
-    html.dark .glass-panel { background: rgba(15, 23, 42, 0.85); border-color: rgba(255,255,255,0.08); }
+    html.dark body {
+      background-color: #0b1c30;
+      color: #f8fafc;
+    }
+
+    html.dark .glass-panel {
+      background: rgba(15, 23, 42, 0.85);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
   </style>
 </head>
 
@@ -197,8 +231,8 @@
             setAuthUser(null); setProfile(null); setTxns([]); setSellers([]); setScreen('login'); setReady(true);
           }
         });
-        sb.auth.getSession().then(async ({ data: { session }, error }) => { 
-          if (error || !session) { setReady(true); } 
+        sb.auth.getSession().then(async ({ data: { session }, error }) => {
+          if (error || !session) { setReady(true); }
           else {
             setAuthUser(session.user);
             await loadProfile(session.user.id, session.user).catch(console.error);
@@ -228,8 +262,8 @@
         if (!authUser || !profile) return;
         const totalCost = energyCost + (kwh * 0.21);
         const newBal = Math.max(0, profile.balance - totalCost);
-        setProfile(p => ({ ...p, balance: newBal })); 
-        setSellers(p => p.filter(s => s.id !== seller.id)); 
+        setProfile(p => ({ ...p, balance: newBal }));
+        setSellers(p => p.filter(s => s.id !== seller.id));
         const tx = { id: `tx-${Date.now()}`, user_id: authUser.id, type: 'bought', title: `Bought from ${seller.name}`, kwh, price_per_kwh: seller.pricePerKwh, amount: totalCost, hash: `0x${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`, date_label: 'Just now', counterparty: seller.name, status: 'Completed' };
         setTxns(p => [tx, ...p]);
         toast(`Purchased ${kwh} kWh from ${seller.name} (₹${totalCost.toFixed(2)})`);
@@ -246,7 +280,7 @@
         const newBal = (profile.balance || 0) + net;
         const randomDist = (Math.random() * 2.0 + 0.1).toFixed(1) + 'km';
         const listing = { id: `listing-${Date.now()}`, seller_id: authUser.id, seller_name: profile.name, units, price, distance: randomDist, location: profile.flat_no || 'Your Block', status: 'active', rating: 5.0 };
-        setProfile(p => ({ ...p, surplus: newSurplus, balance: newBal })); 
+        setProfile(p => ({ ...p, surplus: newSurplus, balance: newBal }));
         const tx = { id: `tx-${Date.now()}`, user_id: authUser.id, type: 'sold', title: 'Published to P2P Microgrid', kwh: units, price_per_kwh: price, amount: net, hash: `0x${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`, date_label: 'Just now', counterparty: 'P2P Grid', status: 'Completed' };
         setTxns(p => [tx, ...p]);
         setSellers(prev => [{ id: listing.id, name: listing.seller_name, location: listing.location, distance: listing.distance, kwh: listing.units, pricePerKwh: listing.price, rating: 5.0, verified: true, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev]);
@@ -269,7 +303,7 @@
 
       if (!ready) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#0b1c30] text-white">
-          <img src="./logo.jpg" alt="SolarShare" className="w-24 h-24 object-contain mb-6 rounded-2xl drop-shadow-[0_0_20px_rgba(34,197,94,0.6)] spin" style={{animationDuration:'2s'}} />
+          <img src="./logo.jpg" alt="SolarShare" className="w-24 h-24 object-contain mb-6 rounded-2xl drop-shadow-[0_0_20px_rgba(34,197,94,0.6)] spin" style={{ animationDuration: '2s' }} />
           <h2 className="text-[20px] font-bold animate-pulse tracking-wide">Connecting to Grid...</h2>
           <p className="text-sm text-slate-400 mt-2">Authenticating secure connection</p>
         </div>
@@ -334,7 +368,7 @@
       return (
         <div className="flex-1 flex flex-col min-h-screen bg-[#f0f7f0] animate-screen">
           {/* Hero Banner */}
-          <div className="relative w-full overflow-hidden" style={{height:'min(42vw,300px)',minHeight:'200px'}}>
+          <div className="relative w-full overflow-hidden" style={{ height: 'min(42vw,300px)', minHeight: '200px' }}>
             <img src="./banner.jpg" alt="SolarShare" className="absolute inset-0 w-full h-full object-cover object-center" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/60"></div>
             <div className="absolute top-3 right-3 bg-[#22c55e] text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow flex items-center gap-1">
@@ -342,12 +376,12 @@
             </div>
             <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
               <p className="text-white/80 text-[11px] font-bold tracking-widest uppercase mb-1">India's #1 P2P Energy Network</p>
-              <h1 className="text-white font-extrabold tracking-tight leading-tight drop-shadow-lg" style={{fontSize:'clamp(22px,5vw,34px)'}}>Share Sunlight.<br/>Share Savings.</h1>
+              <h1 className="text-white font-extrabold tracking-tight leading-tight drop-shadow-lg" style={{ fontSize: 'clamp(22px,5vw,34px)' }}>Share Sunlight.<br />Share Savings.</h1>
             </div>
           </div>
           {/* Stats Strip */}
           <div className="w-full bg-[#006e2f] text-white flex justify-around items-center py-2.5 px-4">
-            {[['1,200+','Prosumers'],['₹48L+','Traded'],['98%','Uptime']].map(([v,l])=>(
+            {[['1,200+', 'Prosumers'], ['₹48L+', 'Traded'], ['98%', 'Uptime']].map(([v, l]) => (
               <div key={l} className="text-center">
                 <div className="text-[14px] font-extrabold leading-tight">{v}</div>
                 <div className="text-[10px] text-emerald-200 font-semibold">{l}</div>
@@ -382,7 +416,7 @@
                 </div>
                 <button type="submit" disabled={loading}
                   className="w-full h-12 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-60"
-                  style={{background:'linear-gradient(135deg,#22c55e,#006e2f)'}}>
+                  style={{ background: 'linear-gradient(135deg,#22c55e,#006e2f)' }}>
                   {loading && <span className="spin material-symbols-outlined text-[20px]">autorenew</span>}
                   <span>{loading ? 'Signing in...' : 'Login to Dashboard'}</span>
                   {!loading && <span className="material-symbols-outlined text-[18px]">arrow_forward</span>}
@@ -391,7 +425,7 @@
             </div>
             {/* Trust badges */}
             <div className="flex gap-2 flex-wrap justify-center mb-4">
-              {[['bolt','Real-time Trading'],['shield','Blockchain Secured'],['eco','IEEE 2030.5']].map(([icon,label])=>(
+              {[['bolt', 'Real-time Trading'], ['shield', 'Blockchain Secured'], ['eco', 'IEEE 2030.5']].map(([icon, label]) => (
                 <span key={label} className="flex items-center gap-1 bg-white border text-[11px] font-semibold text-slate-600 px-2.5 py-1 rounded-full shadow-sm">
                   <span className="material-symbols-outlined text-[13px] text-emerald-600">{icon}</span>{label}
                 </span>
@@ -569,7 +603,7 @@
                 <span className="text-sm font-bold text-[#006e2f] dark:text-emerald-400 font-mono">{liveData.freq.toFixed(2)} Hz</span>
               </div>
             </div>
-            
+
             <button onClick={() => onNavigate('sell_surplus')} className="w-full h-14 mt-4 bg-[#006e2f] dark:bg-[#22c55e] hover:bg-emerald-700 dark:hover:bg-emerald-500 text-white rounded-2xl font-bold shadow-[0_0_20px_rgba(0,110,47,0.2)] dark:shadow-[0_0_20px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-2">
               <span className="material-symbols-outlined">add_circle</span> Auto-Trade Surplus
             </button>
@@ -669,21 +703,21 @@
       const [search, setSearch] = useState(''); const [filter, setFilter] = useState('All'); const [sel, setSel] = useState(null); const [kwh, setKwh] = useState(2); const [procState, setProcState] = useState('');
       useEffect(() => { if (initSellerId) { const m = sellers.find(s => s.id === initSellerId); if (m) setSel(m); } }, [initSellerId, sellers]);
       const filtered = sellers.filter(s => { const q = s.name.toLowerCase().includes(search.toLowerCase()) || (s.location || '').toLowerCase().includes(search.toLowerCase()); if (!q) return false; if (filter === 'Nearby') return parseFloat(s.distance) <= 0.5; return true; }).sort((a, b) => filter === 'Lowest Price' ? a.pricePerKwh - b.pricePerKwh : 0);
-      const cost = sel ? Number((kwh * sel.pricePerKwh).toFixed(2)) : 0; 
+      const cost = sel ? Number((kwh * sel.pricePerKwh).toFixed(2)) : 0;
       const totalFee = kwh * 0.21;
       const finalCost = cost + totalFee;
       const insuf = finalCost > userBal;
-      const confirm = () => { 
-        if (!sel || insuf) return; 
-        setProcState('Locating Seller...'); 
+      const confirm = () => {
+        if (!sel || insuf) return;
+        setProcState('Locating Seller...');
         setTimeout(() => {
           setProcState('Verifying Grid Connection...');
           setTimeout(async () => {
             setProcState('Transferring Energy...');
             setTimeout(async () => {
-              await onBuy(sel, kwh, cost); 
-              setProcState(''); 
-              setSel(null); 
+              await onBuy(sel, kwh, cost);
+              setProcState('');
+              setSel(null);
             }, 800);
           }, 800);
         }, 800);
@@ -792,7 +826,7 @@
           <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-5">
             <div className="flex flex-col items-center text-center"><img src={av} alt={profile.name} className="w-24 h-24 rounded-full border-4 border-white shadow-md mb-2" /><h2 className="text-[22px] font-bold text-[#0b1c30]">{profile.name}</h2><p className="text-xs text-slate-500">{profile.role} • {profile.flat_no}</p><span className="mt-1 text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">{profile.discom}</span></div>
             <div className="bg-white p-5 rounded-3xl border shadow-sm"><div className="flex justify-between items-center"><div><span className="text-xs text-slate-500 uppercase font-bold block">Wallet Balance</span><div className="text-[28px] font-black text-[#0b1c30]">₹{(profile.balance || 0).toFixed(2)}</div></div><button onClick={onAddFunds} className="px-4 py-2 bg-[#22c55e] text-white rounded-xl text-xs font-bold shadow-sm">Add Funds</button></div></div>
-            
+
             <div className="space-y-3">
               {menu.map((m, i) => (
                 <button key={i} onClick={() => onNavigate(m.id)} className="w-full bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between active:scale-95 transition-transform hover:bg-slate-50">
