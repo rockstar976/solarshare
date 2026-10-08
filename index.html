@@ -23,6 +23,11 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
     body {
       font-family: 'Hanken Grotesk', sans-serif;
@@ -139,7 +144,7 @@
 <body class="bg-[#f8f9ff] text-[#0b1c30] antialiased">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useCallback } = React;
+    const { useState, useEffect, useCallback, useRef } = React;
     const SUPA_URL = 'https://ydfvybwcbsptwtlwrsjf.supabase.co';
     const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkZnZ5YndjYnNwdHd0bHdyc2pmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNDMxNzIsImV4cCI6MjEwMzgxOTE3Mn0.hmmNq7-rv2Z406-ZMRsh__tuV2bq-9Q9JHjmj6JGOe0';
     const sb = window.supabase.createClient(SUPA_URL, SUPA_ANON, {
@@ -201,11 +206,18 @@
       };
       const loadMarket = async () => {
         const { data } = await sb.from('market_listings').select('*').eq('status', 'active').order('created_at', { ascending: false });
-        setSellers((data || []).map(l => ({
-          id: l.id, name: l.seller_name, location: l.location || 'Greenwood Heights',
-          distance: l.distance, kwh: l.units, pricePerKwh: l.price, rating: 4.8, verified: true,
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(l.seller_name)}&background=22c55e&color=fff&bold=true`
-        })));
+        setSellers((data || []).map(l => {
+          const distKm = parseFloat(l.distance) || (Math.random() * 5);
+          const angle = Math.random() * Math.PI * 2;
+          const lat = 28.6139 + (distKm / 111) * Math.cos(angle);
+          const lng = 77.2090 + (distKm / (111 * Math.cos(28.6139 * (Math.PI / 180)))) * Math.sin(angle);
+          return {
+            id: l.id, name: l.seller_name, location: l.location || 'Greenwood Heights',
+            distance: l.distance, kwh: l.units, pricePerKwh: l.price, rating: 4.8, verified: true,
+            lat, lng,
+            avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(l.seller_name)}&background=22c55e&color=fff&bold=true`
+          };
+        }));
       };
 
       useEffect(() => {
@@ -221,7 +233,11 @@
                 const l = p.new;
                 setSellers(prev => {
                   if (prev.some(x => x.id === l.id)) return prev;
-                  return [{ id: l.id, name: l.seller_name, location: l.location || 'Society', distance: l.distance, kwh: l.units, pricePerKwh: l.price, rating: 4.8, verified: true, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(l.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev];
+                  const distKm = parseFloat(l.distance) || (Math.random() * 5);
+                  const angle = Math.random() * Math.PI * 2;
+                  const lat = 28.6139 + (distKm / 111) * Math.cos(angle);
+                  const lng = 77.2090 + (distKm / (111 * Math.cos(28.6139 * (Math.PI / 180)))) * Math.sin(angle);
+                  return [{ id: l.id, name: l.seller_name, location: l.location || 'Society', distance: l.distance, kwh: l.units, pricePerKwh: l.price, rating: 4.8, verified: true, lat, lng, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(l.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev];
                 });
               })
               .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'market_listings' }, p => {
@@ -279,11 +295,15 @@
         const newSurplus = Math.max(0, (profile.surplus || 0) - units);
         const newBal = (profile.balance || 0) + net;
         const randomDist = (Math.random() * 2.0 + 0.1).toFixed(1) + 'km';
-        const listing = { id: `listing-${Date.now()}`, seller_id: authUser.id, seller_name: profile.name, units, price, distance: randomDist, location: profile.flat_no || 'Your Block', status: 'active', rating: 5.0 };
+        const distKm = parseFloat(randomDist);
+        const angle = Math.random() * Math.PI * 2;
+        const lat = 28.6139 + (distKm / 111) * Math.cos(angle);
+        const lng = 77.2090 + (distKm / (111 * Math.cos(28.6139 * (Math.PI / 180)))) * Math.sin(angle);
+        const listing = { id: `listing-${Date.now()}`, seller_id: authUser.id, seller_name: profile.name, units, price, distance: randomDist, location: profile.flat_no || 'Your Block', status: 'active', rating: 5.0, lat, lng };
         setProfile(p => ({ ...p, surplus: newSurplus, balance: newBal }));
         const tx = { id: `tx-${Date.now()}`, user_id: authUser.id, type: 'sold', title: 'Published to P2P Microgrid', kwh: units, price_per_kwh: price, amount: net, hash: `0x${Math.random().toString(16).substr(2, 4)}...${Math.random().toString(16).substr(2, 4)}`, date_label: 'Just now', counterparty: 'P2P Grid', status: 'Completed' };
         setTxns(p => [tx, ...p]);
-        setSellers(prev => [{ id: listing.id, name: listing.seller_name, location: listing.location, distance: listing.distance, kwh: listing.units, pricePerKwh: listing.price, rating: 5.0, verified: true, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev]);
+        setSellers(prev => [{ id: listing.id, name: listing.seller_name, location: listing.location, distance: listing.distance, kwh: listing.units, pricePerKwh: listing.price, rating: 5.0, verified: true, lat, lng, avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(listing.seller_name)}&background=22c55e&color=fff&bold=true` }, ...prev]);
         toast(`Listed ${units} kWh @ ₹${price.toFixed(2)}/u (+₹${net.toFixed(2)})`);
         try {
           await sb.from('market_listings').insert(listing);
@@ -703,9 +723,99 @@
       );
     }
 
+    // SELLERS MAP
+    function SellersMap({ sellers, onSelect }) {
+      const mapRef = useRef(null);
+      const containerRef = useRef(null);
+
+      useEffect(() => {
+        if (!containerRef.current) return;
+        if (!mapRef.current) {
+          mapRef.current = window.L.map(containerRef.current, { zoomControl: false }).setView([28.6139, 77.2090], 13);
+          window.L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+          }).addTo(mapRef.current);
+
+          // Add custom zoom control
+          window.L.control.zoom({ position: 'topright' }).addTo(mapRef.current);
+
+          // Locate Me Control
+          const LocateControl = window.L.Control.extend({
+            options: { position: 'bottomright' },
+            onAdd: function (map) {
+              const div = window.L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+              div.innerHTML = `<button class="w-[34px] h-[34px] bg-white hover:bg-slate-50 flex items-center justify-center text-slate-700 transition-colors" title="My Location"><span class="material-symbols-outlined text-[20px]">my_location</span></button>`;
+              div.onclick = function(e){
+                e.stopPropagation();
+                map.flyTo([28.6139, 77.2090], 13, { duration: 1 });
+              };
+              return div;
+            }
+          });
+          mapRef.current.addControl(new LocateControl());
+
+          // Add user marker (Delhi center)
+          const userIcon = window.L.divIcon({
+            html: `<div class="w-5 h-5 bg-blue-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(59,130,246,0.8)] animate-pulse"></div>`,
+            className: '',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          window.L.marker([28.6139, 77.2090], { icon: userIcon, zIndexOffset: 1000 }).addTo(mapRef.current).bindPopup("<b class='text-sm text-slate-800 font-bold'>Your Smart Meter</b><br/><span class='text-xs text-slate-500'>Grid connection active</span>").openPopup();
+        }
+
+        // Clear existing markers (excluding tile layer and user marker)
+        mapRef.current.eachLayer((layer) => {
+          if (layer instanceof window.L.Marker && !layer.getPopup()?.getContent()?.includes("Your Smart Meter")) {
+            mapRef.current.removeLayer(layer);
+          }
+        });
+
+        // Add seller markers
+        sellers.forEach(s => {
+          if (!s.lat || !s.lng) return;
+          const icon = window.L.divIcon({
+            html: `<div class="w-11 h-11 rounded-full border-[3px] border-emerald-500 shadow-lg overflow-hidden bg-white flex items-center justify-center transition-transform hover:scale-110"><img src="${s.avatar}" class="w-full h-full object-cover" /></div><div class="bg-white text-emerald-700 text-[11px] font-black px-2 py-0.5 rounded-full shadow-md absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap border border-emerald-100">₹${s.pricePerKwh.toFixed(2)}</div>`,
+            className: 'relative',
+            iconSize: [44, 44],
+            iconAnchor: [22, 22]
+          });
+          const marker = window.L.marker([s.lat, s.lng], { icon }).addTo(mapRef.current);
+          
+          // Build interactive popup
+          const popupContent = document.createElement('div');
+          popupContent.className = 'p-1 min-w-[160px] text-center font-sans';
+          popupContent.innerHTML = `
+            <img src="${s.avatar}" class="w-14 h-14 rounded-full mx-auto mb-2 border-2 border-emerald-100 shadow-sm object-cover" />
+            <h4 class="font-bold text-[#0b1c30] text-[15px] leading-tight mb-1">${s.name}</h4>
+            <div class="flex items-center justify-center gap-1 text-[11px] font-bold text-slate-500 mb-2">
+              <span class="material-symbols-outlined text-[14px] text-amber-500">star</span> ${s.rating} • ${s.distance}
+            </div>
+            <div class="bg-emerald-50 rounded-lg p-2 mb-3 border border-emerald-100">
+              <div class="text-[11px] text-emerald-800 font-bold mb-0.5">Available Energy</div>
+              <div class="text-lg font-black text-[#006e2f] leading-none">${s.kwh} <span class="text-[10px] font-bold text-emerald-600">kWh</span></div>
+            </div>
+            <button class="buy-btn w-full py-2 bg-[#22c55e] hover:bg-[#006e2f] transition-colors text-white rounded-xl text-xs font-bold shadow-md flex items-center justify-center gap-1">
+              <span class="material-symbols-outlined text-[16px]">bolt</span> Buy Energy
+            </button>
+          `;
+          
+          popupContent.querySelector('.buy-btn').addEventListener('click', () => {
+            onSelect(s);
+            mapRef.current.closePopup();
+          });
+
+          marker.bindPopup(popupContent, { minWidth: 180, offset: [0, -10] });
+        });
+      }, [sellers]);
+
+      return <div ref={containerRef} className="absolute inset-0 z-0"></div>;
+    }
+
     // MARKET
     function MarketScreen({ sellers, userBal, initSellerId, onBuy, onNavigate, onAddFunds }) {
       const [search, setSearch] = useState(''); const [filter, setFilter] = useState('All'); const [sel, setSel] = useState(null); const [kwh, setKwh] = useState(2); const [procState, setProcState] = useState('');
+      const [viewMode, setViewMode] = useState('list'); // 'list' | 'map'
       useEffect(() => { if (initSellerId) { const m = sellers.find(s => s.id === initSellerId); if (m) setSel(m); } }, [initSellerId, sellers]);
       const filtered = sellers.filter(s => { const q = s.name.toLowerCase().includes(search.toLowerCase()) || (s.location || '').toLowerCase().includes(search.toLowerCase()); if (!q) return false; if (filter === 'Nearby') return parseFloat(s.distance) <= 0.5; return true; }).sort((a, b) => filter === 'Lowest Price' ? a.pricePerKwh - b.pricePerKwh : 0);
       const cost = sel ? Number((kwh * sel.pricePerKwh).toFixed(2)) : 0;
@@ -733,18 +843,37 @@
             <div className="flex items-center gap-3"><button onClick={() => onNavigate('home')} className="w-9 h-9 rounded-full bg-slate-200/60 flex items-center justify-center"><span className="material-symbols-outlined text-[20px]">arrow_back</span></button><h1 className="text-[18px] font-bold text-[#0b1c30]">Energy Marketplace</h1></div>
             <div className="bg-emerald-50 text-[#006e2f] px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">₹{userBal.toFixed(2)}</div>
           </header>
-          <main className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-4">
-            <div className="relative flex items-center bg-white rounded-2xl border px-3 h-12 shadow-sm input-focus-ring"><span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">search</span><input type="text" placeholder="Search neighbor or block..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-transparent text-sm focus:outline-none" /></div>
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">{['All', 'Nearby', 'Lowest Price'].map(f => <button key={f} onClick={() => setFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold border ${filter === f ? 'bg-[#006e2f] text-white border-transparent' : 'bg-white text-slate-600'}`}>{f}</button>)}</div>
-            {filtered.length === 0
-              ? <div className="bg-white rounded-2xl border p-8 text-center text-sm text-slate-400"><span className="material-symbols-outlined text-[36px] block mb-2">solar_power</span>No active sellers right now.</div>
-              : <div className="space-y-3">{filtered.map(s => (
-                <div key={s.id} className="bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3"><img src={s.avatar} alt={s.name} className="w-12 h-12 rounded-full object-cover border" /><div><h4 className="font-bold text-[15px] text-[#0b1c30]">{s.name}</h4><p className="text-xs text-slate-500">{s.location} • {s.distance}</p><span className="inline-block mt-1 text-[11px] font-bold text-[#006e2f] bg-emerald-50 px-2 py-0.5 rounded-md">{s.kwh} kWh Available</span></div></div>
-                  <div className="text-right"><div className="text-[17px] font-black text-[#006e2f]">₹{s.pricePerKwh.toFixed(2)}<span className="text-xs font-normal text-slate-500">/u</span></div><button onClick={() => { setSel(s); setKwh(Math.min(2, s.kwh)); }} className="mt-1 px-4 py-2 bg-[#22c55e] hover:bg-[#006e2f] text-white rounded-xl text-xs font-bold shadow-sm">Buy Energy</button></div>
+          <main className="flex-1 flex flex-col w-full relative">
+            <div className="px-5 pt-4 max-w-2xl mx-auto w-full space-y-4 shrink-0">
+              <div className="relative flex items-center bg-white rounded-2xl border px-3 h-12 shadow-sm input-focus-ring"><span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">search</span><input type="text" placeholder="Search neighbor or block..." value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-transparent text-sm focus:outline-none" /></div>
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">{['All', 'Nearby', 'Lowest Price'].map(f => <button key={f} onClick={() => setFilter(f)} className={`px-4 py-1.5 rounded-full text-xs font-bold border ${filter === f ? 'bg-[#006e2f] text-white border-transparent' : 'bg-white text-slate-600'}`}>{f}</button>)}</div>
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button onClick={() => setViewMode('list')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors ${viewMode === 'list' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}><span className="material-symbols-outlined text-[18px]">list</span></button>
+                  <button onClick={() => setViewMode('map')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors ${viewMode === 'map' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}><span className="material-symbols-outlined text-[18px]">map</span></button>
                 </div>
-              ))}</div>
-            }
+              </div>
+            </div>
+
+            <div className="flex-1 px-5 pt-4 pb-4 max-w-2xl mx-auto w-full relative h-full flex flex-col">
+              {viewMode === 'map' ? (
+                <div className="flex-1 w-full min-h-[400px] relative rounded-2xl overflow-hidden border shadow-sm">
+                  <SellersMap sellers={filtered} onSelect={(s) => { setSel(s); setKwh(Math.min(2, s.kwh)); }} />
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto pb-4">
+                  {filtered.length === 0
+                    ? <div className="bg-white rounded-2xl border p-8 text-center text-sm text-slate-400"><span className="material-symbols-outlined text-[36px] block mb-2">solar_power</span>No active sellers right now.</div>
+                    : <div className="space-y-3">{filtered.map(s => (
+                      <div key={s.id} className="bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between">
+                        <div className="flex items-center gap-3"><img src={s.avatar} alt={s.name} className="w-12 h-12 rounded-full object-cover border" /><div><h4 className="font-bold text-[15px] text-[#0b1c30]">{s.name}</h4><p className="text-xs text-slate-500">{s.location} • {s.distance}</p><span className="inline-block mt-1 text-[11px] font-bold text-[#006e2f] bg-emerald-50 px-2 py-0.5 rounded-md">{s.kwh} kWh Available</span></div></div>
+                        <div className="text-right"><div className="text-[17px] font-black text-[#006e2f]">₹{s.pricePerKwh.toFixed(2)}<span className="text-xs font-normal text-slate-500">/u</span></div><button onClick={() => { setSel(s); setKwh(Math.min(2, s.kwh)); }} className="mt-1 px-4 py-2 bg-[#22c55e] hover:bg-[#006e2f] text-white rounded-xl text-xs font-bold shadow-sm">Buy Energy</button></div>
+                      </div>
+                    ))}</div>
+                  }
+                </div>
+              )}
+            </div>
           </main>
           {sel && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -1023,7 +1152,7 @@
 
     // ANALYTICS
     function AnalyticsScreen({ txns, profile, onNavigate }) {
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const now = new Date();
       const hasData = txns && txns.length > 0;
 
@@ -1042,7 +1171,7 @@
         const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
         const label = months[d.getMonth()];
         const fullLabel = months[d.getMonth()] + ' ' + d.getFullYear();
-        
+
         if (!hasData) {
           return { label, fullLabel, ...demoValues[i] };
         }
@@ -1117,16 +1246,16 @@
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-slate-800 dark:text-white text-sm">Monthly Sales vs Purchase</h3>
                 <div className="flex gap-3 text-[11px] font-bold">
-                  <span className="flex items-center gap-1"><span style={{background:'#22c55e'}} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Sold</span></span>
-                  <span className="flex items-center gap-1"><span style={{background:'#f87171'}} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Bought</span></span>
+                  <span className="flex items-center gap-1"><span style={{ background: '#22c55e' }} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Sold</span></span>
+                  <span className="flex items-center gap-1"><span style={{ background: '#f87171' }} className="w-2.5 h-2.5 rounded-sm inline-block"></span><span className="text-slate-600 dark:text-slate-300">Bought</span></span>
                 </div>
               </div>
-              <div className="flex items-end justify-between gap-1" style={{height:'140px'}}>
+              <div className="flex items-end justify-between gap-1" style={{ height: '140px' }}>
                 {displayData.map((m, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                    <div className="w-full flex gap-0.5 items-end" style={{height:'120px'}}>
-                      <div className="flex-1 rounded-t-lg transition-all" style={{background:'#22c55e', height: m.sold > 0 ? Math.max(4, (m.sold / maxVal) * 116) + 'px' : '0px'}}></div>
-                      <div className="flex-1 rounded-t-lg transition-all" style={{background:'#f87171', height: m.bought > 0 ? Math.max(4, (m.bought / maxVal) * 116) + 'px' : '0px'}}></div>
+                    <div className="w-full flex gap-0.5 items-end" style={{ height: '120px' }}>
+                      <div className="flex-1 rounded-t-lg transition-all" style={{ background: '#22c55e', height: m.sold > 0 ? Math.max(4, (m.sold / maxVal) * 116) + 'px' : '0px' }}></div>
+                      <div className="flex-1 rounded-t-lg transition-all" style={{ background: '#f87171', height: m.bought > 0 ? Math.max(4, (m.bought / maxVal) * 116) + 'px' : '0px' }}></div>
                     </div>
                     <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold text-center leading-tight">{m.label}</span>
                   </div>
@@ -1137,14 +1266,14 @@
             {/* Profit Bar Chart */}
             <div className="bg-white dark:bg-slate-800/80 rounded-3xl border border-slate-200 dark:border-slate-700 p-5 shadow-sm transition-colors">
               <h3 className="font-bold text-slate-800 dark:text-white text-sm mb-4">Monthly Net Profit</h3>
-              <div className="flex items-end justify-between gap-1" style={{height:'120px'}}>
+              <div className="flex items-end justify-between gap-1" style={{ height: '120px' }}>
                 {displayData.map((m, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
-                    <div className="w-full flex flex-col items-center justify-end" style={{height:'100px'}}>
-                      <div className="text-[9px] font-bold mb-0.5" style={{color: m.profit >= 0 ? '#006e2f' : '#ef4444'}}>
+                    <div className="w-full flex flex-col items-center justify-end" style={{ height: '100px' }}>
+                      <div className="text-[9px] font-bold mb-0.5" style={{ color: m.profit >= 0 ? '#006e2f' : '#ef4444' }}>
                         {m.profit !== 0 ? `₹${Math.round(m.profit / 1000 * 10) / 10}k` : '₹0'}
                       </div>
-                      <div className="w-full rounded-t-lg transition-all" style={{background: m.profit >= 0 ? '#006e2f' : '#ef4444', height: m.profit !== 0 ? Math.max(4, (Math.abs(m.profit) / maxProfit) * 80) + 'px' : '0px'}}></div>
+                      <div className="w-full rounded-t-lg transition-all" style={{ background: m.profit >= 0 ? '#006e2f' : '#ef4444', height: m.profit !== 0 ? Math.max(4, (Math.abs(m.profit) / maxProfit) * 80) + 'px' : '0px' }}></div>
                     </div>
                     <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold text-center leading-tight">{m.label}</span>
                   </div>
@@ -1165,7 +1294,7 @@
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">{m.count} txns • {m.kwhSold.toFixed(1)} kWh sold</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-black text-sm" style={{color: m.profit >= 0 ? '#006e2f' : '#ef4444'}}>₹{m.profit.toLocaleString('en-IN', {maximumFractionDigits: 0})}</div>
+                      <div className="font-black text-sm" style={{ color: m.profit >= 0 ? '#006e2f' : '#ef4444' }}>₹{m.profit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
                       <div className="text-[10px] text-slate-400 dark:text-slate-500">profit</div>
                     </div>
                   </div>
@@ -1182,11 +1311,11 @@
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">kWh Sold</div>
                 </div>
                 <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3">
-                  <div className="text-lg font-black text-red-600 dark:text-red-400">{displayData.reduce((a,m)=>a+m.kwhBought,0).toFixed(0)}</div>
+                  <div className="text-lg font-black text-red-600 dark:text-red-400">{displayData.reduce((a, m) => a + m.kwhBought, 0).toFixed(0)}</div>
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">kWh Bought</div>
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3">
-                  <div className="text-lg font-black text-blue-600 dark:text-blue-400">{displayData.reduce((a,m)=>a+m.count,0)}</div>
+                  <div className="text-lg font-black text-blue-600 dark:text-blue-400">{displayData.reduce((a, m) => a + m.count, 0)}</div>
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Total Txns</div>
                 </div>
               </div>
