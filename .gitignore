@@ -1,0 +1,22 @@
+# Ideathon docs & presentations (kept locally only)
+*.pdf
+*.pptx
+*.txt
+*.ps1
+*.py
+*.sql
+*.jpeg
+embed_images.js
+banner*.jpg
+logo.jpg
+solarshare_logo.jpg
+logo_b64.txt
+logo_only.txt
+banner_only.txt
+htmlmvp.html
+slide5_feasibility.html
+solarshare_*.md
+neccesity/
+.vscode/
+.venv/
+.gemini/
