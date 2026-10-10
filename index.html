@@ -248,10 +248,27 @@
 
       const initUserData = async (user) => {
         setAuthUser(user);
-        await loadProfile(user.id, user).catch(console.error);
-        await loadTxns(user.id).catch(console.error);
-        await loadMarket().catch(console.error);
-        setScreen('home'); setReady(true);
+        // Instant optimistic transition so user does not wait 6+ seconds
+        const optProfile = {
+          id: user.id,
+          name: user.user_metadata?.name || user.email?.split('@')[0] || 'Solar User',
+          role: user.user_metadata?.role || 'Prosumer',
+          flat_no: user.user_metadata?.flat_no || 'A-101',
+          meter_id: user.user_metadata?.meter_id || 'SM-AUTO-7829',
+          discom: user.user_metadata?.discom || 'BSES Rajdhani',
+          balance: 150.00,
+          surplus: 5.0
+        };
+        setProfile(prev => prev || optProfile);
+        setScreen('home');
+        setReady(true);
+
+        // Fetch data concurrently in background without blocking screen transition
+        Promise.allSettled([
+          loadProfile(user.id, user),
+          loadTxns(user.id),
+          loadMarket()
+        ]).catch(console.error);
 
         const channel = sb.channel(`ss-mkt-${user.id}`);
         channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'market_listings', filter: 'status=eq.active' }, p => {
@@ -271,9 +288,17 @@
       };
 
       useEffect(() => {
+        if (window.location.hash.includes('type=recovery') || window.location.href.includes('type=recovery')) {
+          setShowNewPasswordModal(true);
+        }
+
         const { data: authListener } = sb.auth.onAuthStateChange(async (event, session) => {
-          if (session?.user && event === 'SIGNED_IN') {
-            await initUserData(session.user);
+          if (event === 'PASSWORD_RECOVERY') {
+            setShowNewPasswordModal(true);
+          } else if (session?.user && event === 'SIGNED_IN') {
+            if (!window.location.hash.includes('type=recovery')) {
+              await initUserData(session.user);
+            }
           } else if (!session) {
             setAuthUser(null); setProfile(null); setTxns([]); setSellers([]); setScreen('login'); setReady(true);
           }
@@ -282,22 +307,72 @@
         sb.auth.getSession().then(async ({ data: { session }, error }) => {
           if (error || !session) { setReady(true); }
           else {
-            await initUserData(session.user);
+            if (!window.location.hash.includes('type=recovery')) {
+              await initUserData(session.user);
+            } else {
+              setAuthUser(session.user);
+              setReady(true);
+            }
           }
         }).catch((err) => {
-          console.error("Session fetch failed", err);
+          console.error('Session fetch failed', err);
           setReady(true);
         });
-        
         return () => {
           authListener?.subscription?.unsubscribe();
         };
       }, []);
 
+      const handleUpdatePassword = async (e) => {
+        e.preventDefault();
+        if (!newPass || newPass.length < 6) {
+          setNewPassErr('Password must be at least 6 characters.');
+          return;
+        }
+        if (newPass !== confirmPass) {
+          setNewPassErr('Passwords do not match.');
+          return;
+        }
+        setUpdatingPass(true);
+        setNewPassErr('');
+        try {
+          const { error } = await sb.auth.updateUser({ password: newPass });
+          if (error) {
+            setNewPassErr(error.message);
+          } else {
+            toast('Password successfully updated! Welcome back.', 'ok');
+            setShowNewPasswordModal(false);
+            setNewPass('');
+            setConfirmPass('');
+            if (window.history?.replaceState) {
+              window.history.replaceState(null, '', window.location.pathname);
+            }
+            const { data: { session } } = await sb.auth.getSession();
+            if (session?.user) {
+              await initUserData(session.user);
+            } else {
+              setScreen('login');
+            }
+          }
+        } catch (err) {
+          setNewPassErr(err?.message || 'Failed to update password.');
+        } finally {
+          setUpdatingPass(false);
+        }
+      };
+
       const handleLogin = async (email, password) => {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) { toast(error.message, 'err'); return false; }
-        return true;
+        try {
+          const { data, error } = await sb.auth.signInWithPassword({ email, password });
+          if (error) { toast(error.message, 'err'); return false; }
+          if (data?.user) {
+            initUserData(data.user);
+          }
+          return true;
+        } catch (err) {
+          toast(err?.message || 'Login failed', 'err');
+          return false;
+        }
       };
 
       const handleDemoLogin = () => {
@@ -422,6 +497,71 @@
               ))}
             </div>
 
+            {showNewPasswordModal && (
+              <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+                <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-emerald-100 dark:border-slate-700 flex flex-col gap-4 relative">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#006e2f] dark:text-emerald-400 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[28px]">lock_reset</span>
+                    </div>
+                    <div>
+                      <h3 className="text-[18px] font-bold text-[#0b1c30] dark:text-white leading-tight">Create New Password</h3>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Enter your new secure password</p>
+                    </div>
+                  </div>
+
+                  {newPassErr && (
+                    <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs rounded-xl border border-red-200 dark:border-red-900/50 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[16px]">error</span>
+                      {newPassErr}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleUpdatePassword} className="flex flex-col gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">New Password</label>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-3 h-12 input-focus-ring">
+                        <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">lock</span>
+                        <input
+                          type="password"
+                          required
+                          value={newPass}
+                          onChange={e => setNewPass(e.target.value)}
+                          className="w-full bg-transparent focus:outline-none text-sm font-medium dark:text-white"
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Confirm New Password</label>
+                      <div className="relative flex items-center bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 px-3 h-12 input-focus-ring">
+                        <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">lock_clock</span>
+                        <input
+                          type="password"
+                          required
+                          value={confirmPass}
+                          onChange={e => setConfirmPass(e.target.value)}
+                          className="w-full bg-transparent focus:outline-none text-sm font-medium dark:text-white"
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={updatingPass}
+                      className="w-full h-12 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-60"
+                      style={{ background: 'linear-gradient(135deg,#22c55e,#006e2f)' }}>
+                      {updatingPass && <span className="spin material-symbols-outlined text-[20px]">autorenew</span>}
+                      <span>{updatingPass ? 'Saving Password...' : 'Save & Login'}</span>
+                      {!updatingPass && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {showFunds && (
               <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                 <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl flex flex-col gap-4">
@@ -471,8 +611,49 @@
 
 
     function LoginScreen({ onNavigate, onLogin, onDemoLogin }) {
-      const [email, setEmail] = useState(''); const [pass, setPass] = useState(''); const [loading, setLoading] = useState(false); const [err, setErr] = useState('');
-      const submit = async e => { e.preventDefault(); setLoading(true); setErr(''); const ok = await onLogin(email, pass); if (!ok) setErr('Invalid email or password.'); setLoading(false); };
+      const [email, setEmail] = useState('');
+      const [pass, setPass] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [err, setErr] = useState('');
+      const [showForgot, setShowForgot] = useState(false);
+      const [forgotEmail, setForgotEmail] = useState('');
+      const [forgotLoading, setForgotLoading] = useState(false);
+      const [forgotMsg, setForgotMsg] = useState(null);
+
+      const submit = async e => {
+        e.preventDefault();
+        setLoading(true);
+        setErr('');
+        const ok = await onLogin(email, pass);
+        if (!ok) {
+          setErr('Invalid email or password.');
+          setLoading(false);
+        }
+      };
+
+      const handleForgotSubmit = async e => {
+        e.preventDefault();
+        if (!forgotEmail) return;
+        setForgotLoading(true);
+        setForgotMsg(null);
+        try {
+          const { error } = await sb.auth.resetPasswordForEmail(forgotEmail, {
+            redirectTo: window.location.origin
+          });
+          if (error) {
+            setForgotMsg({ type: 'err', text: error.message });
+          } else {
+            setForgotMsg({
+              type: 'ok',
+              text: `Reset link sent to ${forgotEmail}! Please check your email inbox and spam folder.`
+            });
+          }
+        } catch (ex) {
+          setForgotMsg({ type: 'err', text: ex?.message || 'Failed to send reset link.' });
+        } finally {
+          setForgotLoading(false);
+        }
+      };
       return (
         <div className="flex-1 flex flex-col min-h-screen bg-[#f0f7f0] animate-screen">
           {/* Hero Banner */}
@@ -516,7 +697,15 @@
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Password</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => { setForgotEmail(email || ''); setForgotMsg(null); setShowForgot(true); }}
+                      className="text-[11.5px] font-bold text-[#006e2f] hover:text-emerald-700 hover:underline transition-colors focus:outline-none">
+                      Forgot Password?
+                    </button>
+                  </div>
                   <div className="relative flex items-center bg-white rounded-xl border px-3 h-12 input-focus-ring shadow-sm">
                     <span className="material-symbols-outlined text-slate-400 mr-2 text-[20px]">lock</span>
                     <input type="password" required value={pass} onChange={e => setPass(e.target.value)} className="w-full bg-transparent focus:outline-none text-sm font-medium" placeholder="••••••••" />
@@ -554,6 +743,75 @@
             </button>
             <p className="text-center text-[11px] text-slate-400 mt-2">✓ Full app access &nbsp;·&nbsp; ✓ Sample data loaded &nbsp;·&nbsp; ✓ No account required</p>
           </div>
+          {/* Forgot Password Modal */}
+          {showForgot && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-emerald-100 relative">
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(false)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors">
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+                
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-[#006e2f] flex items-center justify-center mb-3">
+                  <span className="material-symbols-outlined text-[28px]">lock_reset</span>
+                </div>
+
+                <h3 className="text-[18px] font-bold text-[#0b1c30]">Forgot Password?</h3>
+                <p className="text-[12px] text-slate-500 mt-1 mb-4">
+                  Enter your registered email address and we'll send you a secure link to reset your password.
+                </p>
+
+                {forgotMsg && (
+                  <div className={`p-3 rounded-xl text-xs mb-4 flex items-start gap-2 border ${
+                    forgotMsg.type === 'ok'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>
+                    <span className="material-symbols-outlined text-[16px] mt-0.5">
+                      {forgotMsg.type === 'ok' ? 'check_circle' : 'error'}
+                    </span>
+                    <span>{forgotMsg.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleForgotSubmit} className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Registered Email</label>
+                    <div className="relative flex items-center bg-white rounded-xl border px-3 h-11 input-focus-ring shadow-sm">
+                      <span className="material-symbols-outlined text-slate-400 mr-2 text-[18px]">alternate_email</span>
+                      <input
+                        type="email"
+                        required
+                        value={forgotEmail}
+                        onChange={e => setForgotEmail(e.target.value)}
+                        className="w-full bg-transparent focus:outline-none text-sm font-medium"
+                        placeholder="your@email.com"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="w-full h-11 text-white font-bold rounded-xl shadow transition-all flex items-center justify-center gap-2 mt-1 disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg,#22c55e,#006e2f)' }}>
+                    {forgotLoading && <span className="spin material-symbols-outlined text-[18px]">autorenew</span>}
+                    <span>{forgotLoading ? 'Sending link...' : 'Send Reset Link'}</span>
+                    {!forgotLoading && <span className="material-symbols-outlined text-[16px]">send</span>}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowForgot(false)}
+                    className="w-full h-10 text-slate-600 font-semibold text-xs rounded-xl hover:bg-slate-100 transition-colors">
+                    Back to Login
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
