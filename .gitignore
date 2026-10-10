@@ -2,6 +2,7 @@
 *.pdf
 *.pptx
 *.txt
+!robots.txt
 *.ps1
 *.py
 *.sql
