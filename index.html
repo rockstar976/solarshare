@@ -202,6 +202,11 @@
       const [showSidebar, setShowSidebar] = useState(false);
       const [darkMode, setDarkMode] = useState(false);
       const [lang, setLang] = useState('en');
+      const [showNewPasswordModal, setShowNewPasswordModal] = useState(false);
+      const [newPass, setNewPass] = useState('');
+      const [confirmPass, setConfirmPass] = useState('');
+      const [updatingPass, setUpdatingPass] = useState(false);
+      const [newPassErr, setNewPassErr] = useState('');
 
       useEffect(() => {
         if (darkMode) document.documentElement.classList.add('dark');
